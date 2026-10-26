@@ -53,10 +53,10 @@ export function isSamePath(a: string, b: string): boolean {
 /**
  * Determines the overall project root used for module folder containment.
  *
- * Normally this is the workspace folder that contains the .uvprojx. For the
- * common Keil layout where the workspace is only the MDK-ARM folder, its
- * non-drive-root parent is treated as the overall project root so sibling
- * folders such as HARDWARE remain valid.
+ * Normally this is the workspace folder that contains the .uvprojx. When the
+ * workspace is the project directory itself, its parent is treated as the
+ * overall project root so sibling folders such as HARDWARE remain valid. Drive
+ * roots are never used as that fallback.
  */
 export function overallProjectRoot(projectPath: string, workspaceRoot?: string): string {
   const projectDirectory = WIN.dirname(normalizeAbsolutePath(projectPath));
@@ -66,19 +66,6 @@ export function overallProjectRoot(projectPath: string, workspaceRoot?: string):
   const workspace = normalizeAbsolutePath(workspaceRoot);
   if (!isSamePath(workspace, projectDirectory)) {
     return workspace;
-  }
-
-  const buildDirectoryNames = new Set([
-    'mdk',
-    'mdk5',
-    'mdk-arm',
-    'mdk5-arm',
-    'project',
-    'projects',
-    'build',
-  ]);
-  if (!buildDirectoryNames.has(WIN.basename(projectDirectory).toLowerCase())) {
-    return projectDirectory;
   }
 
   const parent = WIN.dirname(projectDirectory);

@@ -68,9 +68,18 @@ describe('paths', () => {
     expect(overallProjectRoot(project, 'D:\\work\\demo\\MDK-ARM')).toBe('D:\\work\\demo');
     expect(overallProjectRoot(project, 'D:\\work\\demo')).toBe('D:\\work\\demo');
     expect(overallProjectRoot('D:\\work\\demo\\demo.uvprojx', 'D:\\work\\demo')).toBe(
-      'D:\\work\\demo',
+      'D:\\work',
     );
     expect(overallProjectRoot('D:\\demo.uvprojx', 'D:\\')).toBe('D:\\');
+  });
+
+  it('allows sibling source folders beside a USER project directory', () => {
+    const project =
+      'D:\\Keil5\\StmF4\\Task\\ZHD_MD_STM32_V1.00_20261026\\USER\\demo.uvprojx';
+    const workspace = 'D:\\Keil5\\StmF4\\Task\\ZHD_MD_STM32_V1.00_20261026\\USER';
+    expect(overallProjectRoot(project, workspace)).toBe(
+      'D:\\Keil5\\StmF4\\Task\\ZHD_MD_STM32_V1.00_20261026',
+    );
   });
 
   it('finds the common directory of group files', () => {
