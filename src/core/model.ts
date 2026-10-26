@@ -15,6 +15,8 @@ export interface GroupNode {
   groupClose: number;
   /** Offset of the `<` in `</Files>`, if a `<Files>` element exists. */
   filesClose?: number;
+  /** True when `<Files>` is self-closing (`<Files />`). */
+  filesIsSelfClosing?: boolean;
 }
 
 export interface TargetNode {
@@ -24,6 +26,8 @@ export interface TargetNode {
   targetClose: number;
   /** Offset of the `<` in `</Groups>`, if a `<Groups>` element exists. */
   groupsClose?: number;
+  /** True when `<Groups>` is self-closing (`<Groups />`). */
+  groupsIsSelfClosing?: boolean;
 }
 
 export interface ProjectDocument {
@@ -58,6 +62,8 @@ export interface AddFilesRequest {
 export interface TextInsertion {
   offset: number;
   text: string;
+  /** Number of original characters to replace. When omitted or 0, the text is inserted. */
+  length?: number;
 }
 
 export interface AddFilesResult {

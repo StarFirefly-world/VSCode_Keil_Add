@@ -86,4 +86,44 @@ describe('parseProject', () => {
     const project = parseProject(text, PROJECT);
     expect(project.indentUnit).toBe('\t');
   });
+
+  it('detects a self-closing Files tag', () => {
+    const text = `<Project>
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files />
+        </Group>
+      </Groups>
+    </Target>
+  </Targets>
+</Project>
+`;
+    const project = parseProject(text, PROJECT);
+    const app = project.targets[0].groups[0];
+    expect(app.files).toEqual([]);
+    expect(app.filesIsSelfClosing).toBe(true);
+    expect(text.slice(app.filesClose!, app.filesClose! + 9)).toBe('<Files />');
+  });
+
+  it('detects a self-closing Groups tag', () => {
+    const text = `<Project>
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups />
+    </Target>
+  </Targets>
+</Project>
+`;
+    const project = parseProject(text, PROJECT);
+    expect(project.targets[0].groups).toEqual([]);
+    expect(project.targets[0].groupsIsSelfClosing).toBe(true);
+    expect(
+      text.slice(project.targets[0].groupsClose!, project.targets[0].groupsClose! + 10),
+    ).toBe('<Groups />');
+  });
 });

@@ -232,7 +232,13 @@ export class ProjectWriter implements ProjectWriterPort {
 
     const edit = new vscode.WorkspaceEdit();
     for (const insertion of result.insertions) {
-      edit.insert(uri, document.positionAt(insertion.offset), insertion.text);
+      const start = document.positionAt(insertion.offset);
+      if (insertion.length && insertion.length > 0) {
+        const end = document.positionAt(insertion.offset + insertion.length);
+        edit.replace(uri, new vscode.Range(start, end), insertion.text);
+      } else {
+        edit.insert(uri, start, insertion.text);
+      }
     }
     const applied = await vscode.workspace.applyEdit(edit);
     if (!applied) {

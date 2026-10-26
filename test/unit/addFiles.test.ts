@@ -308,4 +308,70 @@ describe('addFiles', () => {
     expect(updated.targets[0].groups[1].files.at(-1)?.name).toBe('b.c');
     expect(result.filesAdded).toBe(2);
   });
+
+  it('replaces a self-closing Files tag when adding files', () => {
+    const text = `<Project>
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files />
+        </Group>
+      </Groups>
+    </Target>
+  </Targets>
+</Project>
+`;
+    const original = project(text);
+    const result = addFiles(original, {
+      targetName: 'Debug',
+      groups: [
+        {
+          groupName: 'App',
+          files: [{ fileName: 'a.c', path: '.\\App\\a.c', fileType: 1 }],
+        },
+      ],
+    });
+
+    expect(result.text).not.toContain('<Files />');
+    expect(result.text).toContain('<Files>');
+    expect(result.text).toContain('</Files>');
+    expect(result.text).toContain('<FileName>a.c</FileName>');
+    expect(result.text).not.toMatch(/<Files>\s*<\/Files>/);
+
+    const updated = parseProject(result.text, PROJECT);
+    expect(updated.targets[0].groups[0].files.map((file) => file.name)).toEqual(['a.c']);
+  });
+
+  it('replaces a self-closing Groups tag when creating a group', () => {
+    const text = `<Project>
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups />
+    </Target>
+  </Targets>
+</Project>
+`;
+    const original = project(text);
+    const result = addFiles(original, {
+      targetName: 'Debug',
+      groups: [
+        {
+          groupName: 'App',
+          files: [{ fileName: 'a.c', path: '.\\App\\a.c', fileType: 1 }],
+        },
+      ],
+    });
+
+    expect(result.text).not.toContain('<Groups />');
+    expect(result.text).toContain('<Groups>');
+    expect(result.text).toContain('</Groups>');
+    expect(result.text).toContain('<GroupName>App</GroupName>');
+
+    const updated = parseProject(result.text, PROJECT);
+    expect(updated.targets[0].groups.map((group) => group.name)).toEqual(['App']);
+  });
 });

@@ -89,6 +89,25 @@ function findCloseTagStart(text: string, position: number, tagName: string): num
   throw new KeilProjectError('parse', `无法定位 </${tagName}> 的字符位置。`);
 }
 
+function findSelfClosingTagStart(
+  text: string,
+  position: number,
+  tagName: string,
+): number {
+  const escaped = escapeRegExp(tagName);
+  const selfClosePattern = new RegExp(`^<${escaped}(?:\\s[^>]*)?\\/>$`);
+  for (
+    let candidate = text.lastIndexOf('<', position - 1);
+    candidate >= 0;
+    candidate = text.lastIndexOf('<', candidate - 1)
+  ) {
+    if (selfClosePattern.test(text.slice(candidate, position))) {
+      return candidate;
+    }
+  }
+  throw new KeilProjectError('parse', `无法定位 <${tagName}/> 的字符位置。`);
+}
+
 /**
  * Parses a `.uvprojx` document and records the positions needed for minimal
  * text insertions. The parser never attempts to repair malformed XML.
@@ -227,7 +246,12 @@ export function parseProject(
       currentFileField = null;
       fileTypeText = '';
     } else if (tag.name === 'Files' && currentGroup) {
-      currentGroup.filesClose = closeStart >= 0 ? closeStart : undefined;
+      if (frame && frame.selfClosing) {
+        currentGroup.filesClose = findSelfClosingTagStart(text, parser.position, tag.name);
+        currentGroup.filesIsSelfClosing = true;
+      } else {
+        currentGroup.filesClose = closeStart >= 0 ? closeStart : undefined;
+      }
     } else if (tag.name === 'Group' && currentGroup && currentTarget) {
       currentGroup.groupClose = closeStart;
       if (currentGroup.name.length === 0) {
@@ -236,7 +260,12 @@ export function parseProject(
       currentTarget.groups.push(currentGroup);
       currentGroup = undefined;
     } else if (tag.name === 'Groups' && currentTarget) {
-      currentTarget.groupsClose = closeStart >= 0 ? closeStart : undefined;
+      if (frame && frame.selfClosing) {
+        currentTarget.groupsClose = findSelfClosingTagStart(text, parser.position, tag.name);
+        currentTarget.groupsIsSelfClosing = true;
+      } else {
+        currentTarget.groupsClose = closeStart >= 0 ? closeStart : undefined;
+      }
     } else if (tag.name === 'Target' && currentTarget) {
       currentTarget.targetClose = closeStart;
       if (currentTarget.name.length === 0) {

@@ -42,6 +42,40 @@ function buildInsertion(
   return { offset: closeOffset, text: `${eol}${block}` };
 }
 
+function selfClosingTagLength(text: string, start: number): number {
+  const match = /^<[^>]+\/>/.exec(text.slice(start));
+  if (!match) {
+    throw new KeilProjectError('validation', '生成的插入位置不是自闭合标签。');
+  }
+  return match[0].length;
+}
+
+function buildSelfClosingReplacement(
+  closeOffset: number,
+  close: CloseLine,
+  eol: string,
+  blockLines: string[],
+  text: string,
+  tagName: string,
+): TextInsertion {
+  const length = selfClosingTagLength(text, closeOffset);
+  const openTag = `<${tagName}>`;
+  const closeTag = `</${tagName}>`;
+  if (close.formatted) {
+    const block = `${blockLines.join(eol)}${eol}${close.indent}`;
+    return {
+      offset: closeOffset,
+      length,
+      text: `${openTag}${block.slice(close.indent.length)}${closeTag}`,
+    };
+  }
+  return {
+    offset: closeOffset,
+    length,
+    text: `${openTag}${eol}${blockLines.join(eol)}${eol}${closeTag}`,
+  };
+}
+
 function fileBlock(
   file: { fileName: string; path: string; fileType: number },
   indent: string,
@@ -127,23 +161,31 @@ function assertNoDuplicatePaths(
 }
 
 function applyInsertions(text: string, insertions: TextInsertion[]): string {
-  const offsets = new Set<number>();
+  const keys = new Set<string>();
   for (const insertion of insertions) {
+    const length = insertion.length ?? 0;
     if (
       insertion.offset < 0 ||
       insertion.offset > text.length ||
-      offsets.has(insertion.offset)
+      insertion.offset + length > text.length
     ) {
       throw new KeilProjectError('validation', '生成的插入位置无效或发生重叠。');
     }
-    offsets.add(insertion.offset);
+    const key = `${insertion.offset}:${length}`;
+    if (keys.has(key)) {
+      throw new KeilProjectError('validation', '生成的插入位置无效或发生重叠。');
+    }
+    keys.add(key);
   }
 
   let result = text;
   const descending = [...insertions].sort((a, b) => b.offset - a.offset);
   for (const insertion of descending) {
+    const length = insertion.length ?? 0;
     result =
-      result.slice(0, insertion.offset) + insertion.text + result.slice(insertion.offset);
+      result.slice(0, insertion.offset) +
+      insertion.text +
+      result.slice(insertion.offset + length);
   }
   return result;
 }
@@ -193,9 +235,22 @@ export function addFiles(
       for (const file of group.files) {
         lines.push(...fileBlock(file, fileIndent, project.indentUnit));
       }
-      insertions.push(
-        buildInsertion(existingGroup.filesClose, close, project.eol, lines),
-      );
+      if (existingGroup.filesIsSelfClosing) {
+        insertions.push(
+          buildSelfClosingReplacement(
+            existingGroup.filesClose,
+            close,
+            project.eol,
+            lines,
+            project.text,
+            'Files',
+          ),
+        );
+      } else {
+        insertions.push(
+          buildInsertion(existingGroup.filesClose, close, project.eol, lines),
+        );
+      }
     } else {
       const close = closeLineInfo(project.text, existingGroup.groupClose);
       const filesIndent = close.indent + project.indentUnit;
@@ -218,7 +273,20 @@ export function addFiles(
       for (const group of newGroups) {
         lines.push(...groupBlock(group, groupIndent, project.indentUnit));
       }
-      insertions.push(buildInsertion(target.groupsClose, close, project.eol, lines));
+      if (target.groupsIsSelfClosing) {
+        insertions.push(
+          buildSelfClosingReplacement(
+            target.groupsClose,
+            close,
+            project.eol,
+            lines,
+            project.text,
+            'Groups',
+          ),
+        );
+      } else {
+        insertions.push(buildInsertion(target.groupsClose, close, project.eol, lines));
+      }
     } else {
       const close = closeLineInfo(project.text, target.targetClose);
       const groupsIndent = close.indent + project.indentUnit;
