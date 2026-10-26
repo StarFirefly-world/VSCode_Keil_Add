@@ -140,6 +140,8 @@ class MemoryState implements StatePort {
 interface FakeUiOptions {
   directory?: vscode.Uri;
   fileName?: string;
+  moduleName?: string;
+  moduleNames?: string[];
   charset?: SourceCharset;
   confirm?: boolean;
   groupChoice?: GroupPick;
@@ -191,6 +193,13 @@ class FakeUi implements UiPort {
 
   public async inputFileName(): Promise<string | undefined> {
     return this.options.fileName;
+  }
+
+  public async inputModuleName(): Promise<string | undefined> {
+    if (this.options.moduleNames && this.options.moduleNames.length > 0) {
+      return this.options.moduleNames.shift();
+    }
+    return this.options.moduleName;
   }
 
   public async pickEncoding(recommendation: {
@@ -309,6 +318,7 @@ describe('Keil Project Files integration', () => {
     for (const command of [
       'keilProject.addNewC',
       'keilProject.addNewH',
+      'keilProject.addModule',
       'keilProject.addExistingFiles',
       'keilProject.selectProject',
       'keilProject.createGroup',
@@ -348,6 +358,7 @@ describe('Keil Project Files integration', () => {
     assert.ok(labels.includes(t.view.noProject));
     assert.ok(labels.includes(t.view.newC));
     assert.ok(labels.includes(t.view.newH));
+    assert.ok(labels.includes(t.view.addModule));
     assert.ok(labels.includes(t.view.addExisting));
     assert.ok(items.some((item) => item.command?.command === 'keilProject.addNewC'));
     assert.deepEqual(await provider.getChildren(items[0]), []);
@@ -475,6 +486,134 @@ describe('Keil Project Files integration', () => {
       assert.ok(entry.path.startsWith('..\\'));
       assert.equal(path.resolve(path.dirname(temp.projectPath), entry.path), createdPath);
       assert.ok(env.ui.warnings.some((message) => message.includes('工程目录之外')));
+    } finally {
+      await fs
+        .rm(outsideDirectory, { recursive: true, force: true })
+        .catch(() => undefined);
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('creates a module folder and adds only the C file to a separately selected Group', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.root),
+      moduleName: 'motor',
+      charset: 'utf8',
+      groupChoice: { kind: 'create' },
+      newGroupName: 'Drivers',
+    });
+    try {
+      await new KeilCommands(env.deps).addModule(vscode.Uri.file(temp.root));
+
+      const moduleDirectory = path.join(temp.root, 'motor');
+      const header = await fs.readFile(path.join(moduleDirectory, 'motor.h'), 'utf8');
+      assert.equal(header, '#ifndef _MOTOR_H\n#define _MOTOR_H\n#endif\n');
+      const source = await fs.readFile(path.join(moduleDirectory, 'motor.c'), 'utf8');
+      assert.equal(source, '#include "motor.h"\n');
+
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const drivers = updated.targets[0].groups.find((group) => group.name === 'Drivers');
+      assert.ok(drivers);
+      assert.deepEqual(
+        drivers.files.map((file) => file.name),
+        ['motor.c'],
+      );
+      assert.equal(drivers.files[0].path, '.\\motor\\motor.c');
+
+      const allFileNames = updated.targets[0].groups.flatMap((group) =>
+        group.files.map((file) => file.name),
+      );
+      assert.equal(allFileNames.includes('motor.h'), false);
+      assert.ok(env.ui.infos.some((message) => message.includes('motor')));
+      assert.equal(env.ui.errors.length, 0);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('does not overwrite an existing module folder', async () => {
+    const temp = await createTempProject('utf8');
+    const existingDirectory = path.join(temp.root, 'motor');
+    await fs.mkdir(existingDirectory);
+    await fs.writeFile(path.join(existingDirectory, 'keep.txt'), 'keep me\n');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.root),
+      moduleNames: ['motor', 'motor2'],
+      charset: 'utf8',
+    });
+    try {
+      await new KeilCommands(env.deps).addModule(vscode.Uri.file(temp.root));
+
+      assert.equal(
+        await fs.readFile(path.join(existingDirectory, 'keep.txt'), 'utf8'),
+        'keep me\n',
+      );
+      assert.equal(
+        (await fs
+          .stat(path.join(existingDirectory, 'motor.c'))
+          .catch(() => undefined)) === undefined,
+        true,
+      );
+      assert.equal(
+        (await fs.stat(path.join(temp.root, 'motor2', 'motor2.c'))).isFile(),
+        true,
+      );
+      assert.ok(env.ui.errors.some((message) => message.includes('已存在')));
+
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const names = updated.targets[0].groups
+        .flatMap((group) => group.files)
+        .map((file) => file.name);
+      assert.ok(names.includes('motor2.c'));
+      assert.equal(names.includes('motor.c'), false);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('removes module files and the module folder when updating the project fails', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(
+      temp.projectPath,
+      {
+        directory: vscode.Uri.file(temp.root),
+        moduleName: 'rollbackmod',
+        charset: 'utf8',
+      },
+      new FailingWriter(),
+    );
+    const originalProject = await fs.readFile(temp.projectPath);
+    try {
+      await assert.rejects(
+        new KeilCommands(env.deps).addModule(vscode.Uri.file(temp.root)),
+        /模拟工程写入失败/,
+      );
+      await assert.rejects(fs.stat(path.join(temp.root, 'rollbackmod')), /ENOENT/);
+      assert.equal((await fs.readFile(temp.projectPath)).equals(originalProject), true);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('rejects module folders outside the project root', async () => {
+    const temp = await createTempProject('utf8');
+    const outsideDirectory = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'keil-module-outside-'),
+    );
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(outsideDirectory),
+      moduleName: 'motor',
+      charset: 'utf8',
+    });
+    try {
+      await assert.rejects(
+        new KeilCommands(env.deps).addModule(vscode.Uri.file(outsideDirectory)),
+        /工程文件夹内/,
+      );
+      await assert.rejects(fs.stat(path.join(outsideDirectory, 'motor')), /ENOENT/);
     } finally {
       await fs
         .rm(outsideDirectory, { recursive: true, force: true })

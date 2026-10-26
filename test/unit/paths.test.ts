@@ -4,6 +4,8 @@ import {
   canonicalFileKey,
   commonDirectory,
   isPathInside,
+  isPathInsideDirectory,
+  overallProjectRoot,
   toKeilPath,
   validateFileName,
   xmlEscape,
@@ -47,6 +49,28 @@ describe('paths', () => {
   it('recognizes paths inside the project', () => {
     expect(isPathInside(PROJECT, 'D:\\work\\demo\\App\\a.c')).toBe(true);
     expect(isPathInside(PROJECT, 'D:\\work\\other\\a.c')).toBe(false);
+  });
+
+  it('checks containment against an arbitrary project root', () => {
+    expect(isPathInsideDirectory('D:\\work\\demo', 'D:\\work\\demo\\HARDWARE')).toBe(
+      true,
+    );
+    expect(isPathInsideDirectory('D:\\work\\demo', 'D:\\work\\demo')).toBe(true);
+    expect(isPathInsideDirectory('D:\\work\\demo', 'D:\\work\\other\\HARDWARE')).toBe(
+      false,
+    );
+    expect(isPathInsideDirectory('D:\\work\\demo', 'E:\\demo\\HARDWARE')).toBe(false);
+  });
+
+  it('derives the overall project root for module folders', () => {
+    const project = 'D:\\work\\demo\\MDK-ARM\\demo.uvprojx';
+    expect(overallProjectRoot(project)).toBe('D:\\work\\demo\\MDK-ARM');
+    expect(overallProjectRoot(project, 'D:\\work\\demo\\MDK-ARM')).toBe('D:\\work\\demo');
+    expect(overallProjectRoot(project, 'D:\\work\\demo')).toBe('D:\\work\\demo');
+    expect(overallProjectRoot('D:\\work\\demo\\demo.uvprojx', 'D:\\work\\demo')).toBe(
+      'D:\\work\\demo',
+    );
+    expect(overallProjectRoot('D:\\demo.uvprojx', 'D:\\')).toBe('D:\\');
   });
 
   it('finds the common directory of group files', () => {

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { decodeSourceText, encodeSourceText } from '../core/encoding';
 import { KeilProjectError, isNodeError } from '../core/errors';
 import type { SourceCharset, SourceFileSample } from '../core/model';
+import { t } from '../i18n';
 
 const MAX_SAMPLE_SIZE = 5 * 1024 * 1024;
 const MAX_DIRECTORY_SAMPLES = 500;
@@ -17,6 +18,8 @@ export interface CreatedSourceFile {
 }
 
 export interface SourceFilesPort {
+  createDirectory(directoryPath: string): Promise<void>;
+  removeDirectoryIfEmpty(directoryPath: string): Promise<boolean>;
   createFile(
     filePath: string,
     text: string,
@@ -62,6 +65,33 @@ async function readInBatches(filePaths: readonly string[]): Promise<SourceFileSa
 }
 
 export class SourceFileService implements SourceFilesPort {
+  public async createDirectory(directoryPath: string): Promise<void> {
+    try {
+      await fs.mkdir(directoryPath);
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'EEXIST') {
+        throw new KeilProjectError('io', t.module.folderExists(directoryPath), error);
+      }
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        throw new KeilProjectError(
+          'io',
+          `父目录不存在：${path.dirname(directoryPath)}`,
+          error,
+        );
+      }
+      throw new KeilProjectError('io', `创建目录失败：${directoryPath}`, error);
+    }
+  }
+
+  public async removeDirectoryIfEmpty(directoryPath: string): Promise<boolean> {
+    try {
+      await fs.rmdir(directoryPath);
+      return true;
+    } catch (error) {
+      return isNodeError(error) && error.code === 'ENOENT';
+    }
+  }
+
   public async createFile(
     filePath: string,
     text: string,

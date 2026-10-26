@@ -12,6 +12,7 @@
 
 - 在资源管理器文件夹右键新建 Keil C/H 文件，或从命令面板执行；
 - 左侧活动栏提供 **Keil 工程文件** 快捷操作面板，可在不打开目标文件夹的情况下启动新建/添加流程；
+- 添加模块：在指定父目录下生成 `<模块名>/<模块名>.c` 和 `<模块名>.h`，只把 `.c` 加入所选 Group；
 - 多选已有文件，一次加入当前 Target 的指定 Group；
 - 自动扫描工作区 `.uvprojx`，多工程时记住当前工程；
 - 单 Target 自动选择，多 Target 记住上次选择，一次只修改一个 Target；
@@ -34,6 +35,7 @@
 - 新建 Keil C / H 文件；
 - 添加已有文件；
 - 新建 Group；
+- 添加模块；
 - 选择当前工程。
 
 它只是命令入口和状态面板，**不是第二个工程树**，不会复制或替代资源管理器。
@@ -50,6 +52,45 @@
 4. 文件创建成功后写入 `.uvprojx`。
 
 UTF-8 文件可直接打开；GB2312/GBK 文件默认不自动打开，编辑前请使用 VS Code 的 **Reopen with Encoding** 选择 `GBK` 或 `GB18030`。
+
+### 添加模块
+
+执行 **Keil Project Files: 添加 Keil 模块**，或使用左侧快捷面板、资源管理器文件夹右键菜单。
+
+流程会分别选择：
+
+1. Target；
+2. **Keil Group**（可以是已有或新建 Group）；
+3. **模块父文件夹**（磁盘目录，与 Group 无关）；
+4. 模块名；
+5. 编码。
+
+例如父文件夹选择 `HARDWARE`，模块名输入 `motor`，会生成：
+
+```text
+HARDWARE/
+  motor/
+    motor.c
+    motor.h
+```
+
+`motor.h` 内容为：
+
+```c
+#ifndef _MOTOR_H
+#define _MOTOR_H
+#endif
+```
+
+`motor.c` 默认只包含：
+
+```c
+#include "motor.h"
+```
+
+只有 `motor.c` 会加入前面选择的 Group；`motor.h` 只存在于磁盘，不会加入工程，也不会修改 Include Path。
+
+模块父文件夹必须位于总工程目录内。若工作区只打开了常见的 Keil 构建子目录（例如 `MDK-ARM`、`MDK`、`Project`），扩展会把其上一级目录也视为总工程目录，以支持 `MDK-ARM` 与 `HARDWARE` 并列的结构。
 
 ### 工程目录外的文件
 
@@ -95,6 +136,7 @@ D:\MyProject\
 
 - `Keil Project Files: 选择当前 Keil 工程`
 - `Keil Project Files: 新建 Keil Group`
+- `Keil Project Files: 添加 Keil 模块`
 
 ## 设置
 

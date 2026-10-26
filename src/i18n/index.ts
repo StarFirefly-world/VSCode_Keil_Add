@@ -45,6 +45,11 @@ export const t = {
     projectRootLabel: '$(root-folder) 工程根目录',
     browseLabel: '$(folder-opened) 选择其他目录…',
     browseTitle: '选择新文件所在目录',
+    modulePickTitle: '选择模块所在的父文件夹',
+    modulePickPlaceholder:
+      '模块文件夹将创建在此目录下；该目录与前面选择的 Keil Group 相互独立',
+    moduleDefaultDetail: '将在此目录下创建“模块名”文件夹',
+    moduleBrowseTitle: '选择模块所在的父文件夹',
   },
   file: {
     inputTitle: (extension: '.c' | '.h') =>
@@ -90,9 +95,33 @@ export const t = {
     missingProject: '当前工程不存在',
     newC: '新建 Keil C 文件',
     newH: '新建 Keil H 文件',
+    addModule: '添加模块…',
     addExisting: '添加已有文件…',
     createGroup: '新建 Group…',
     selectProject: '选择当前工程…',
+  },
+  module: {
+    inputTitle: '新建 Keil 模块',
+    inputPrompt:
+      '输入模块名，不需要 .c/.h。将在所选目录下创建“模块名/模块名.c”和“模块名.h”；只把 .c 加入前面选择的 Group。',
+    inputPlaceholder: '例如 motor、led_driver',
+    folderExists: (moduleDirectory: string) =>
+      `模块文件夹已存在，不会覆盖：${moduleDirectory}`,
+    duplicateSource: (fileName: string) =>
+      `文件 "${fileName}" 已在当前 Target 中，无法创建同名模块。`,
+    outsideRoot: (root: string, selected: string) =>
+      `模块父文件夹必须位于工程文件夹内（${root}）。当前选择：${selected}`,
+    created: (
+      moduleName: string,
+      targetName: string,
+      groupName: string,
+      moduleDirectory: string,
+    ) =>
+      `已创建模块 "${moduleName}"：${moduleDirectory}。${moduleName}.c 已加入 Target "${targetName}" / Group "${groupName}"；${moduleName}.h 未加入工程，Include Path 未修改。${t.commands.reloadHint}`,
+    rollbackIncomplete: (moduleDirectory: string) =>
+      `工程更新失败，且无法完整清理模块文件，请手动检查：${moduleDirectory}`,
+    internalState: '模块文件创建状态异常。',
+    autoOpenFailed: (reason: string) => `模块已创建并加入工程，但自动打开失败：${reason}`,
   },
   commands: {
     targetNotFound: (name: string) => `未找到 Target "${name}"。`,

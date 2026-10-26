@@ -50,10 +50,57 @@ export function isSamePath(a: string, b: string): boolean {
   return canonicalAbsolutePath(a) === canonicalAbsolutePath(b);
 }
 
+/**
+ * Determines the overall project root used for module folder containment.
+ *
+ * Normally this is the workspace folder that contains the .uvprojx. For the
+ * common Keil layout where the workspace is only the MDK-ARM folder, its
+ * non-drive-root parent is treated as the overall project root so sibling
+ * folders such as HARDWARE remain valid.
+ */
+export function overallProjectRoot(projectPath: string, workspaceRoot?: string): string {
+  const projectDirectory = WIN.dirname(normalizeAbsolutePath(projectPath));
+  if (!workspaceRoot) {
+    return projectDirectory;
+  }
+  const workspace = normalizeAbsolutePath(workspaceRoot);
+  if (!isSamePath(workspace, projectDirectory)) {
+    return workspace;
+  }
+
+  const buildDirectoryNames = new Set([
+    'mdk',
+    'mdk5',
+    'mdk-arm',
+    'mdk5-arm',
+    'project',
+    'projects',
+    'build',
+  ]);
+  if (!buildDirectoryNames.has(WIN.basename(projectDirectory).toLowerCase())) {
+    return projectDirectory;
+  }
+
+  const parent = WIN.dirname(projectDirectory);
+  const driveRoot = WIN.parse(parent).root;
+  if (isSamePath(parent, driveRoot)) {
+    return projectDirectory;
+  }
+  return parent;
+}
+
 export function isPathInside(projectFilePath: string, filePath: string): boolean {
   const projectDir = WIN.dirname(normalizeAbsolutePath(projectFilePath)).toLowerCase();
   const absolute = normalizeAbsolutePath(filePath).toLowerCase();
   const relative = WIN.relative(projectDir, absolute);
+  return relative === '' || (!relative.startsWith('..') && !WIN.isAbsolute(relative));
+}
+
+/** Returns true when `filePath` is the directory or one of its descendants. */
+export function isPathInsideDirectory(directoryPath: string, filePath: string): boolean {
+  const root = normalizeAbsolutePath(directoryPath).toLowerCase();
+  const absolute = normalizeAbsolutePath(filePath).toLowerCase();
+  const relative = WIN.relative(root, absolute);
   return relative === '' || (!relative.startsWith('..') && !WIN.isAbsolute(relative));
 }
 

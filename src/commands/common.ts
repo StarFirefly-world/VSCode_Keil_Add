@@ -2,9 +2,15 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import type { ProjectDocument, TargetNode } from '../core/model';
+import type {
+  ProjectDocument,
+  SourceCharset,
+  SourceFileSample,
+  TargetNode,
+} from '../core/model';
 import { findGroup } from '../core/parseProject';
 import { commonDirectory, resolveProjectEntryPath } from '../core/paths';
+import { countSourceEncodings, recommendSourceEncoding } from '../core/sourceEncoding';
 import type { ConfigPort } from '../adapters/config';
 import type {
   ProjectRepositoryPort,
@@ -197,4 +203,55 @@ export function allProjectSourcePaths(project: ProjectDocument): string[] {
     }
   }
   return paths;
+}
+
+/**
+ * Recommends and confirms the encoding for a new source file or module.
+ * Sampling stops as soon as the target folder has a decisive vote.
+ */
+export async function chooseSourceEncoding(
+  deps: CommandDependencies,
+  project: ProjectDocument,
+  target: TargetNode,
+  groupName: string,
+  directoryPath: string,
+): Promise<SourceCharset | undefined> {
+  const setting = deps.config.getNewFileEncoding();
+  const remembered = deps.state.getDirectoryEncoding(directoryPath);
+
+  let folderSamples: SourceFileSample[] = [];
+  let groupSamples: SourceFileSample[] = [];
+  let projectSamples: SourceFileSample[] = [];
+  if (setting === 'auto') {
+    folderSamples = await deps.sourceFiles.collectDirectorySamples(directoryPath);
+    const folderVotes = countSourceEncodings(folderSamples);
+    const hasFolderVotes = folderVotes.utf8 + folderVotes.gb > 0;
+
+    if (!remembered && !hasFolderVotes) {
+      groupSamples = await deps.sourceFiles.collectSamples(
+        groupFilePaths(project, groupName, target),
+      );
+      const groupVotes = countSourceEncodings(groupSamples);
+      const hasGroupVotes = groupVotes.utf8 + groupVotes.gb > 0;
+      if (!hasGroupVotes) {
+        projectSamples = await deps.sourceFiles.collectSamples(
+          allProjectSourcePaths(project),
+        );
+      }
+    }
+  }
+
+  const recommendation = recommendSourceEncoding({
+    setting,
+    remembered,
+    folderSamples,
+    groupSamples,
+    projectSamples,
+  });
+  const chosen = await deps.ui.pickEncoding(recommendation, directoryPath);
+  if (!chosen) {
+    return undefined;
+  }
+  await deps.state.setDirectoryEncoding(directoryPath, chosen);
+  return chosen;
 }

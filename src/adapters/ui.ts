@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import type { EncodingRecommendation, SourceCharset } from '../core/model';
+import { validateModuleName } from '../core/moduleTemplates';
 import { encodingCountsLabel } from '../core/sourceEncoding';
 import { t } from '../i18n';
 
@@ -28,8 +29,10 @@ export interface UiPort {
   pickDirectory(
     defaultDirectory: vscode.Uri,
     projectDirectory: vscode.Uri,
+    mode?: 'file' | 'module',
   ): Promise<vscode.Uri | undefined>;
   inputFileName(extension: '.c' | '.h'): Promise<string | undefined>;
+  inputModuleName(): Promise<string | undefined>;
   pickEncoding(
     recommendation: EncodingRecommendation,
     directoryPath: string,
@@ -219,12 +222,14 @@ export class VSCodeUi implements UiPort {
   public async pickDirectory(
     defaultDirectory: vscode.Uri,
     projectDirectory: vscode.Uri,
+    mode: 'file' | 'module' = 'file',
   ): Promise<vscode.Uri | undefined> {
+    const moduleMode = mode === 'module';
     const items: DirectoryItem[] = [
       {
         label: t.directory.defaultLabel,
         description: defaultDirectory.fsPath,
-        detail: t.directory.defaultDetail,
+        detail: moduleMode ? t.directory.moduleDefaultDetail : t.directory.defaultDetail,
         directory: defaultDirectory,
       },
     ];
@@ -241,8 +246,10 @@ export class VSCodeUi implements UiPort {
     });
 
     const picked = await vscode.window.showQuickPick(items, {
-      title: t.directory.pickTitle,
-      placeHolder: t.directory.pickPlaceholder,
+      title: moduleMode ? t.directory.modulePickTitle : t.directory.pickTitle,
+      placeHolder: moduleMode
+        ? t.directory.modulePickPlaceholder
+        : t.directory.pickPlaceholder,
       ignoreFocusOut: true,
     });
     if (!picked) {
@@ -250,7 +257,7 @@ export class VSCodeUi implements UiPort {
     }
     if (picked.browse) {
       const folders = await vscode.window.showOpenDialog({
-        title: t.directory.browseTitle,
+        title: moduleMode ? t.directory.moduleBrowseTitle : t.directory.browseTitle,
         canSelectFiles: false,
         canSelectFolders: true,
         canSelectMany: false,
@@ -272,6 +279,19 @@ export class VSCodeUi implements UiPort {
           return t.file.emptyError;
         }
         return undefined;
+      },
+    });
+    return name?.trim();
+  }
+
+  public async inputModuleName(): Promise<string | undefined> {
+    const name = await vscode.window.showInputBox({
+      title: t.module.inputTitle,
+      prompt: t.module.inputPrompt,
+      placeHolder: t.module.inputPlaceholder,
+      ignoreFocusOut: true,
+      validateInput: (value) => {
+        return validateModuleName(value).error;
       },
     });
     return name?.trim();

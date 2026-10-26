@@ -5,20 +5,12 @@ import * as vscode from 'vscode';
 import { addFiles } from '../core/addFiles';
 import { KeilProjectError } from '../core/errors';
 import { fileTypeForPath } from '../core/fileTypes';
-import type {
-  ProjectDocument,
-  SourceCharset,
-  SourceFileSample,
-  TargetNode,
-} from '../core/model';
 import { findTarget } from '../core/parseProject';
 import { resolveProjectEntryPath, toKeilPath, validateFileName } from '../core/paths';
-import { countSourceEncodings, recommendSourceEncoding } from '../core/sourceEncoding';
 import { renderSourceTemplate, type TemplateKind } from '../core/templates';
 import { t } from '../i18n';
 import {
-  allProjectSourcePaths,
-  groupFilePaths,
+  chooseSourceEncoding,
   projectDirectoryUri,
   ProjectSession,
   targetFileKeys,
@@ -64,53 +56,6 @@ async function chooseFileName(
     }
     return { fileName, filePath };
   }
-}
-
-async function chooseEncoding(
-  deps: CommandDependencies,
-  project: ProjectDocument,
-  target: TargetNode,
-  groupName: string,
-  directoryPath: string,
-): Promise<SourceCharset | undefined> {
-  const setting = deps.config.getNewFileEncoding();
-  const remembered = deps.state.getDirectoryEncoding(directoryPath);
-
-  let folderSamples: SourceFileSample[] = [];
-  let groupSamples: SourceFileSample[] = [];
-  let projectSamples: SourceFileSample[] = [];
-  if (setting === 'auto') {
-    folderSamples = await deps.sourceFiles.collectDirectorySamples(directoryPath);
-    const folderVotes = countSourceEncodings(folderSamples);
-    const hasFolderVotes = folderVotes.utf8 + folderVotes.gb > 0;
-
-    if (!remembered && !hasFolderVotes) {
-      groupSamples = await deps.sourceFiles.collectSamples(
-        groupFilePaths(project, groupName, target),
-      );
-      const groupVotes = countSourceEncodings(groupSamples);
-      const hasGroupVotes = groupVotes.utf8 + groupVotes.gb > 0;
-      if (!hasGroupVotes) {
-        projectSamples = await deps.sourceFiles.collectSamples(
-          allProjectSourcePaths(project),
-        );
-      }
-    }
-  }
-
-  const recommendation = recommendSourceEncoding({
-    setting,
-    remembered,
-    folderSamples,
-    groupSamples,
-    projectSamples,
-  });
-  const chosen = await deps.ui.pickEncoding(recommendation, directoryPath);
-  if (!chosen) {
-    return undefined;
-  }
-  await deps.state.setDirectoryEncoding(directoryPath, chosen);
-  return chosen;
 }
 
 export async function addNewFile(
@@ -186,7 +131,7 @@ export async function addNewFile(
     deps.ui.showWarning(t.commands.outsideProject);
   }
 
-  const charset = await chooseEncoding(
+  const charset = await chooseSourceEncoding(
     deps,
     project,
     target,

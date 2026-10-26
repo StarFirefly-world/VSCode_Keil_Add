@@ -83,6 +83,9 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
       selectedUris as vscode.Uri[] | undefined,
     ),
   );
+  register('keilProject.addModule', (uri) =>
+    commands.addModule(uri as vscode.Uri | undefined),
+  );
   register('keilProject.selectProject', () => commands.selectProject());
   register('keilProject.createGroup', () => commands.createGroup());
 

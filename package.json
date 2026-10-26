@@ -22,6 +22,7 @@
   "activationEvents": [
     "onCommand:keilProject.addNewC",
     "onCommand:keilProject.addNewH",
+    "onCommand:keilProject.addModule",
     "onCommand:keilProject.addExistingFiles",
     "onCommand:keilProject.selectProject",
     "onCommand:keilProject.createGroup",
@@ -41,6 +42,12 @@
         "title": "新建 Keil H 文件",
         "category": "Keil Project Files",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "keilProject.addModule",
+        "title": "添加 Keil 模块",
+        "category": "Keil Project Files",
+        "icon": "$(symbol-module)"
       },
       {
         "command": "keilProject.addExistingFiles",
@@ -96,6 +103,11 @@
           "command": "keilProject.addNewH",
           "when": "explorerResourceIsFolder",
           "group": "keil@2"
+        },
+        {
+          "command": "keilProject.addModule",
+          "when": "explorerResourceIsFolder",
+          "group": "keil@3"
         },
         {
           "command": "keilProject.addExistingFiles",
