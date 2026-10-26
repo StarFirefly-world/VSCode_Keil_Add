@@ -1,0 +1,175 @@
+{
+  "name": "keil-project-files",
+  "displayName": "Keil Project Files",
+  "description": "在 VS Code 中新建 Keil MDK5 C/H 文件并把文件加入 .uvprojx 工程。",
+  "version": "0.1.0",
+  "publisher": "keil-project-files",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "keil",
+    "mdk",
+    "uvprojx",
+    "stm32",
+    "embedded"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:keilProject.addNewC",
+    "onCommand:keilProject.addNewH",
+    "onCommand:keilProject.addExistingFiles",
+    "onCommand:keilProject.selectProject",
+    "onCommand:keilProject.createGroup"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "keilProject.addNewC",
+        "title": "新建 Keil C 文件",
+        "category": "Keil Project Files"
+      },
+      {
+        "command": "keilProject.addNewH",
+        "title": "新建 Keil H 文件",
+        "category": "Keil Project Files"
+      },
+      {
+        "command": "keilProject.addExistingFiles",
+        "title": "添加到 Keil 工程",
+        "category": "Keil Project Files"
+      },
+      {
+        "command": "keilProject.selectProject",
+        "title": "选择当前 Keil 工程",
+        "category": "Keil Project Files"
+      },
+      {
+        "command": "keilProject.createGroup",
+        "title": "新建 Keil Group",
+        "category": "Keil Project Files"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "keilProject.addNewC",
+          "when": "explorerResourceIsFolder",
+          "group": "keil@1"
+        },
+        {
+          "command": "keilProject.addNewH",
+          "when": "explorerResourceIsFolder",
+          "group": "keil@2"
+        },
+        {
+          "command": "keilProject.addExistingFiles",
+          "when": "!explorerResourceIsFolder",
+          "group": "keil@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Keil Project Files",
+      "properties": {
+        "keilProject.projectFile": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "手动指定当前 `.uvprojx` 工程文件。留空时自动扫描工作区；多工程会要求选择并记住。"
+        },
+        "keilProject.newFileEncoding": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "utf8",
+            "gb2312"
+          ],
+          "enumDescriptions": [
+            "根据目标目录、Group 或工程内已有源文件的多数编码推断",
+            "始终使用 UTF-8（不带 BOM）",
+            "始终使用 GB2312/GBK"
+          ],
+          "default": "auto",
+          "scope": "resource",
+          "description": "新建源文件的默认编码。auto 会分析已有 .c/.h 文件。"
+        },
+        "keilProject.autoOpenNewFile": {
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "utf8-only"
+          ],
+          "enumDescriptions": [
+            "创建后总是打开新文件",
+            "创建后不打开新文件",
+            "仅当新文件为 UTF-8 时自动打开"
+          ],
+          "default": "utf8-only",
+          "description": "新建文件后是否在编辑器中打开。GB2312 文件默认不打开，避免乱码误保存。"
+        },
+        "keilProject.backupProjectFile": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "修改工程文件前，把原文件备份到扩展全局存储目录。"
+        },
+        "keilProject.template.c": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "新建 C 文件模板。留空使用内置模板。支持 `${filename}`、`${basename}`、`${date}`、`${year}`、`${includeGuard}` 占位符。"
+        },
+        "keilProject.template.h": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "新建 H 文件模板。留空使用内置模板。支持 `${filename}`、`${basename}`、`${date}`、`${year}`、`${includeGuard}` 占位符。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run check && node esbuild.mjs --production",
+    "check": "tsc --noEmit",
+    "lint": "eslint src test --ext .ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "compile": "npm run check && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build:integration": "node esbuild.test.mjs",
+    "test:integration": "npm run compile && npm run build:integration && vscode-test",
+    "package": "vsce package --no-dependencies --allow-missing-repository",
+    "verify": "npm run check && npm run lint && npm test && npm run compile",
+    "verify:all": "npm run verify && npm run test:integration"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3",
+    "saxes": "^6.0.0",
+    "write-file-atomic": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.90.0",
+    "@types/write-file-atomic": "^3.0.3",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^2.32.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}

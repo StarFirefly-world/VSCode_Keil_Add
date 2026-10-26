@@ -1,0 +1,514 @@
+import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as vscode from 'vscode';
+
+import type { ConfigPort } from '../../src/adapters/config';
+import {
+  ProjectRepository,
+  type ProjectSnapshot,
+} from '../../src/adapters/projectRepository';
+import { ProjectWriter, type ProjectWriterPort } from '../../src/adapters/projectWriter';
+import { SourceFileService } from '../../src/adapters/sourceFiles';
+import type { StatePort } from '../../src/adapters/state';
+import type { AddPreview, GroupPick, UiPort } from '../../src/adapters/ui';
+import { KeilCommands, type CommandDependencies } from '../../src/commands';
+import { addFiles } from '../../src/core/addFiles';
+import {
+  decodeProjectBytes,
+  decodeSourceText,
+  encodeProjectText,
+} from '../../src/core/encoding';
+import { KeilProjectError } from '../../src/core/errors';
+import type { SourceCharset } from '../../src/core/model';
+import { parseProject } from '../../src/core/parseProject';
+
+const EMPTY_FILES_BLOCK = '<Files>\n          </Files>';
+
+interface TempProject {
+  root: string;
+  projectPath: string;
+  appDirectory: string;
+  projectText: string;
+}
+
+function projectText(charset: 'utf8' | 'gb2312'): string {
+  const encoding = charset === 'utf8' ? 'UTF-8' : 'GB2312';
+  return `<?xml version="1.0" encoding="${encoding}"?>
+<Project>
+  <!-- 中文注释：必须保持原样 -->
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files>
+            <File>
+              <FileName>main.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\\App\\main.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+      </Groups>
+    </Target>
+  </Targets>
+</Project>
+`;
+}
+
+async function createTempProject(charset: 'utf8' | 'gb2312'): Promise<TempProject> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'keil-project-files-'));
+  const appDirectory = path.join(root, 'App');
+  await fs.mkdir(appDirectory, { recursive: true });
+  await fs.writeFile(path.join(appDirectory, 'main.c'), 'int main(void) { return 0; }\n');
+  const text = projectText(charset);
+  const projectPath = path.join(root, 'demo.uvprojx');
+  await fs.writeFile(projectPath, encodeProjectText(text, charset));
+  return { root, projectPath, appDirectory, projectText: text };
+}
+
+class FakeConfig implements ConfigPort {
+  public projectFile = '';
+  public encoding: 'auto' | 'utf8' | 'gb2312' = 'utf8';
+  public autoOpen: 'always' | 'never' | 'utf8-only' = 'never';
+  public backup = true;
+  public templates: Record<'c' | 'h', string> = { c: '', h: '' };
+
+  public constructor(projectFile: string) {
+    this.projectFile = projectFile;
+  }
+
+  public getProjectFile(): string {
+    return this.projectFile;
+  }
+
+  public getNewFileEncoding(): 'auto' | 'utf8' | 'gb2312' {
+    return this.encoding;
+  }
+
+  public getAutoOpenNewFile(): 'always' | 'never' | 'utf8-only' {
+    return this.autoOpen;
+  }
+
+  public getBackupProjectFile(): boolean {
+    return this.backup;
+  }
+
+  public getTemplate(kind: 'c' | 'h'): string {
+    return this.templates[kind];
+  }
+}
+
+class MemoryState implements StatePort {
+  private current: string | undefined;
+  private readonly targets = new Map<string, string>();
+  private readonly encodings = new Map<string, SourceCharset>();
+
+  public getCurrentProject(): string | undefined {
+    return this.current;
+  }
+
+  public async setCurrentProject(projectPath: string): Promise<void> {
+    this.current = projectPath;
+  }
+
+  public getLastTarget(projectPath: string): string | undefined {
+    return this.targets.get(projectPath.toLowerCase());
+  }
+
+  public async setLastTarget(projectPath: string, targetName: string): Promise<void> {
+    this.targets.set(projectPath.toLowerCase(), targetName);
+  }
+
+  public getDirectoryEncoding(directoryPath: string): SourceCharset | undefined {
+    return this.encodings.get(directoryPath.toLowerCase());
+  }
+
+  public async setDirectoryEncoding(
+    directoryPath: string,
+    charset: SourceCharset,
+  ): Promise<void> {
+    this.encodings.set(directoryPath.toLowerCase(), charset);
+  }
+}
+
+interface FakeUiOptions {
+  directory?: vscode.Uri;
+  fileName?: string;
+  charset?: SourceCharset;
+  confirm?: boolean;
+  groupChoice?: GroupPick;
+  newGroupName?: string;
+}
+
+class FakeUi implements UiPort {
+  public readonly infos: string[] = [];
+  public readonly warnings: string[] = [];
+  public readonly errors: string[] = [];
+  public readonly previews: AddPreview[] = [];
+
+  public constructor(private readonly options: FakeUiOptions = {}) {}
+
+  public async pickProject(): Promise<string | undefined> {
+    return undefined;
+  }
+
+  public async pickProjectFile(): Promise<string | undefined> {
+    return undefined;
+  }
+
+  public async pickExistingFiles(): Promise<vscode.Uri[] | undefined> {
+    return undefined;
+  }
+
+  public async pickTarget(): Promise<string | undefined> {
+    return 'Debug';
+  }
+
+  public async pickGroup(groupNames: string[]): Promise<GroupPick | undefined> {
+    return (
+      this.options.groupChoice ?? {
+        kind: 'existing',
+        name: groupNames[0],
+      }
+    );
+  }
+
+  public async inputGroupName(): Promise<string | undefined> {
+    return this.options.newGroupName;
+  }
+
+  public async pickDirectory(
+    defaultDirectory: vscode.Uri,
+  ): Promise<vscode.Uri | undefined> {
+    return this.options.directory ?? defaultDirectory;
+  }
+
+  public async inputFileName(): Promise<string | undefined> {
+    return this.options.fileName;
+  }
+
+  public async pickEncoding(recommendation: {
+    charset: SourceCharset;
+  }): Promise<SourceCharset | undefined> {
+    return this.options.charset ?? recommendation.charset;
+  }
+
+  public async confirmAddFiles(preview: AddPreview): Promise<boolean> {
+    this.previews.push(preview);
+    return this.options.confirm ?? true;
+  }
+
+  public showInfo(message: string): void {
+    this.infos.push(message);
+  }
+
+  public showWarning(message: string): void {
+    this.warnings.push(message);
+  }
+
+  public showError(message: string): void {
+    this.errors.push(message);
+  }
+}
+
+class FailingWriter implements ProjectWriterPort {
+  public async write(): Promise<{ backupPath?: string }> {
+    throw new KeilProjectError('io', '模拟工程写入失败');
+  }
+}
+
+interface TestEnvironment {
+  deps: CommandDependencies;
+  ui: FakeUi;
+  config: FakeConfig;
+  state: MemoryState;
+  storage: string;
+}
+
+function createEnvironment(
+  projectPath: string,
+  options: FakeUiOptions = {},
+  writer?: ProjectWriterPort,
+): TestEnvironment {
+  const storage = path.join(os.tmpdir(), `keil-storage-${Date.now()}-${Math.random()}`);
+  const config = new FakeConfig(projectPath);
+  const state = new MemoryState();
+  const ui = new FakeUi(options);
+  return {
+    deps: {
+      repository: new ProjectRepository(),
+      writer: writer ?? new ProjectWriter(vscode.Uri.file(storage)),
+      sourceFiles: new SourceFileService(),
+      state,
+      config,
+      ui,
+    },
+    ui,
+    config,
+    state,
+    storage,
+  };
+}
+
+async function closeAllEditors(): Promise<void> {
+  try {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  } catch {
+    // Nothing to close in the test host.
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
+
+async function cleanup(temp: TempProject, storage: string): Promise<void> {
+  await closeAllEditors();
+  await fs.rm(storage, { recursive: true, force: true }).catch(() => undefined);
+  await fs.rm(temp.root, { recursive: true, force: true }).catch(() => undefined);
+}
+
+describe('Keil Project Files integration', () => {
+  it('activates the extension and registers all commands', async () => {
+    const extension = vscode.extensions.getExtension(
+      'keil-project-files.keil-project-files',
+    );
+    assert.ok(extension, 'development extension should be discoverable');
+    await extension.activate();
+    const commands = await vscode.commands.getCommands(true);
+    for (const command of [
+      'keilProject.addNewC',
+      'keilProject.addNewH',
+      'keilProject.addExistingFiles',
+      'keilProject.selectProject',
+      'keilProject.createGroup',
+    ]) {
+      assert.ok(commands.includes(command), `${command} should be registered`);
+    }
+  });
+
+  it('creates a UTF-8 C file through the full command flow', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.appDirectory),
+      fileName: 'app',
+      charset: 'utf8',
+    });
+    try {
+      await new KeilCommands(env.deps).addNewC(vscode.Uri.file(temp.appDirectory));
+
+      const createdPath = path.join(temp.appDirectory, 'app.c');
+      const createdBytes = await fs.readFile(createdPath);
+      assert.equal(createdBytes[0], 0x2f, 'should not write a BOM');
+      assert.match(createdBytes.toString('utf8'), /@file app\.c/);
+
+      const projectBytes = await fs.readFile(temp.projectPath);
+      const decoded = decodeProjectBytes(projectBytes);
+      assert.equal(decoded.charset, 'utf8');
+      assert.match(decoded.text, /<FileName>app\.c<\/FileName>/);
+      assert.match(decoded.text, /<FilePath>\.\\App\\app\.c<\/FilePath>/);
+      assert.match(decoded.text, /<FileName>main\.c<\/FileName>/);
+      assert.match(decoded.text, /中文注释：必须保持原样/);
+
+      const updated = parseProject(decoded.text, temp.projectPath);
+      assert.deepEqual(
+        updated.targets[0].groups[0].files.map((file) => file.name),
+        ['main.c', 'app.c'],
+      );
+      assert.equal(env.ui.errors.length, 0);
+      assert.ok(env.ui.infos.some((message) => message.includes('已创建')));
+
+      const backups = await fs.readdir(path.join(env.storage, 'backups'));
+      assert.equal(backups.length, 1);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('preserves UTF-8 BOM and CRLF when the project is saved with WorkspaceEdit', async () => {
+    const temp = await createTempProject('utf8');
+    const crlfText = temp.projectText.replace(/\n/g, '\r\n');
+    await fs.writeFile(
+      temp.projectPath,
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(crlfText, 'utf8')]),
+    );
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.appDirectory),
+      fileName: 'bom',
+      charset: 'utf8',
+    });
+    try {
+      await new KeilCommands(env.deps).addNewC(vscode.Uri.file(temp.appDirectory));
+
+      const bytes = await fs.readFile(temp.projectPath);
+      assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+      const decoded = decodeProjectBytes(bytes);
+      assert.equal(decoded.charset, 'utf8bom');
+      assert.match(decoded.text, /<FileName>bom\.c<\/FileName>/);
+      assert.ok(decoded.text.includes('\r\n'));
+      assert.equal(decoded.text.replace(/\r\n/g, '').includes('\n'), false);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('writes GB2312 projects and new Chinese-named headers without changing encoding', async () => {
+    const temp = await createTempProject('gb2312');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.appDirectory),
+      fileName: '驱动',
+      charset: 'gb2312',
+    });
+    env.config.autoOpen = 'utf8-only';
+    try {
+      await new KeilCommands(env.deps).addNewH(vscode.Uri.file(temp.appDirectory));
+
+      const createdPath = path.join(temp.appDirectory, '驱动.h');
+      const createdBytes = await fs.readFile(createdPath);
+      assert.notEqual(createdBytes[0], 0xef);
+      const sourceText = decodeSourceText(createdBytes, 'gb2312');
+      assert.match(sourceText, /@file 驱动\.h/);
+      assert.match(sourceText, /#ifndef 驱动_H|#ifndef ___H/);
+
+      const projectBytes = await fs.readFile(temp.projectPath);
+      const decoded = decodeProjectBytes(projectBytes);
+      assert.equal(decoded.charset, 'gb2312');
+      assert.match(decoded.text, /<FileName>驱动\.h<\/FileName>/);
+      assert.match(decoded.text, /<FilePath>\.\\App\\驱动\.h<\/FilePath>/);
+      assert.match(decoded.text, /中文注释：必须保持原样/);
+
+      const isOpen = vscode.workspace.textDocuments.some(
+        (document) => document.uri.fsPath.toLowerCase() === createdPath.toLowerCase(),
+      );
+      assert.equal(isOpen, false, 'GB file must not be auto-opened');
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('adds multiple existing files and skips duplicates', async () => {
+    const temp = await createTempProject('utf8');
+    const drivers = path.join(temp.root, 'Drivers');
+    await fs.mkdir(drivers);
+    const fooPath = path.join(drivers, 'foo.c');
+    const barPath = path.join(drivers, 'bar.h');
+    await fs.writeFile(fooPath, 'void foo(void) {}\n');
+    await fs.writeFile(barPath, '#pragma once\n');
+    const mainPath = path.join(temp.appDirectory, 'main.c');
+
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.appDirectory),
+      charset: 'utf8',
+    });
+    try {
+      await new KeilCommands(env.deps).addExistingFiles(vscode.Uri.file(fooPath), [
+        vscode.Uri.file(fooPath),
+        vscode.Uri.file(barPath),
+        vscode.Uri.file(mainPath),
+      ]);
+
+      assert.equal(env.ui.previews.length, 1);
+      assert.equal(env.ui.previews[0].files.length, 2);
+      assert.equal(env.ui.previews[0].skipped.length, 1);
+      assert.match(env.ui.previews[0].skipped[0].reason, /已存在/);
+
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      assert.deepEqual(
+        updated.targets[0].groups[0].files.map((file) => file.name),
+        ['main.c', 'foo.c', 'bar.h'],
+      );
+      assert.equal(await fs.readFile(fooPath, 'utf8'), 'void foo(void) {}\n');
+      assert.equal(await fs.readFile(barPath, 'utf8'), '#pragma once\n');
+
+      const textAfterFirst = decoded.text;
+      await new KeilCommands(env.deps).addExistingFiles(vscode.Uri.file(fooPath), [
+        vscode.Uri.file(fooPath),
+      ]);
+      const textAfterSecond = (await fs.readFile(temp.projectPath)).toString('utf8');
+      assert.equal(textAfterSecond, textAfterFirst);
+      assert.ok(env.ui.warnings.some((message) => message.includes('没有可添加')));
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('creates an empty group that is visible in the project', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(temp.projectPath, {
+      newGroupName: 'Modules',
+    });
+    try {
+      await new KeilCommands(env.deps).createGroup();
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const group = updated.targets[0].groups.find(
+        (candidate) => candidate.name === 'Modules',
+      );
+      assert.ok(group);
+      assert.deepEqual(group.files, []);
+      assert.ok(decoded.text.includes(EMPTY_FILES_BLOCK));
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('deletes a newly created source file when updating the project fails', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(
+      temp.projectPath,
+      {
+        directory: vscode.Uri.file(temp.appDirectory),
+        fileName: 'rollback',
+        charset: 'utf8',
+      },
+      new FailingWriter(),
+    );
+    const originalProject = await fs.readFile(temp.projectPath);
+    try {
+      await assert.rejects(
+        new KeilCommands(env.deps).addNewC(vscode.Uri.file(temp.appDirectory)),
+        /模拟工程写入失败/,
+      );
+      await assert.rejects(fs.stat(path.join(temp.appDirectory, 'rollback.c')), /ENOENT/);
+      const projectAfter = await fs.readFile(temp.projectPath);
+      assert.equal(projectAfter.equals(originalProject), true);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('aborts with a conflict when the project changed after reading it', async () => {
+    const temp = await createTempProject('utf8');
+    const storage = path.join(os.tmpdir(), `keil-storage-${Date.now()}-${Math.random()}`);
+    try {
+      const repository = new ProjectRepository();
+      const snapshot: ProjectSnapshot = await repository.read(temp.projectPath);
+      const result = addFiles(snapshot.document, {
+        targetName: 'Debug',
+        groups: [
+          {
+            groupName: 'App',
+            files: [{ fileName: 'late.c', path: '.\\App\\late.c', fileType: 1 }],
+          },
+        ],
+      });
+
+      const externalText = `${snapshot.document.text}\n<!-- external change -->\n`;
+      await fs.writeFile(temp.projectPath, externalText, 'utf8');
+
+      const writer = new ProjectWriter(vscode.Uri.file(storage));
+      await assert.rejects(
+        writer.write(snapshot, result, true),
+        (error: unknown) =>
+          error instanceof KeilProjectError && error.code === 'conflict',
+      );
+      assert.equal(await fs.readFile(temp.projectPath, 'utf8'), externalText);
+    } finally {
+      await closeAllEditors();
+      await fs.rm(storage, { recursive: true, force: true }).catch(() => undefined);
+      await fs.rm(temp.root, { recursive: true, force: true }).catch(() => undefined);
+    }
+  });
+});
