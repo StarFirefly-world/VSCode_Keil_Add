@@ -1,8 +1,8 @@
 # Keil Project Files 技术方案
 
-> 版本：v1.0  
+> 版本：v1.1  
 > 对应产品文档：[PRODUCT_DESIGN.md](../PRODUCT_DESIGN.md)  
-> 状态：范围已确认，待实现
+> 状态：已实现（0.1.0），本文档与当前实现对齐
 
 ## 1. 范围与前提
 
@@ -12,7 +12,7 @@
 2. 把新文件或已有文件加入 `.uvprojx` 的指定 Target / Group；
 3. 让文件在 Keil Assistant 和 Keil 工程树中可见。
 
-明确不做：编译、下载、调试、源代码编辑/重构、Include Path 维护、文件删除/移动/重命名、工程树、文件夹递归添加、多 Target 批量修改、Keil Assistant 深度集成。
+明确不做：编译、下载、调试、源代码编辑/重构、Include Path 维护、文件删除/移动/重命名、工程树、文件夹递归添加、多 Target 批量修改、Keil Assistant 深度集成。“添加模块”是上述 1 + 2 的组合入口：一次生成同名 `.c`/`.h` 与模块文件夹，仅 `.c` 入工程。
 
 技术前提：
 
@@ -127,6 +127,7 @@ interface EncodingRecommendation {
 处理规则：
 
 - 兼容 `Groups` / `Files` 缺失的情况；
+- 自闭合 `<Files/>`、`<Groups/>`、`<Group/>` 按空元素处理，插入时替换为完整标签块；
 - 不依赖固定缩进、换行符或路径风格；
 - 保留 XML 声明、注释、`<RTE>` 等未涉及内容；
 - 解析失败时直接报错，不尝试“修复”。
@@ -271,7 +272,7 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 3. 生成新文本、校验、备份。
 4. 编码回原字符集，做 round-trip 校验。
 5. `write-file-atomic` 原子写入。
-6. 重新读取并解析；失败则恢复备份。
+6. 重新读取并解析；失败则恢复备份。恢复同时覆盖“文本相同但字节偏差”的情况（例如 BOM 丢失）：只要文本与原快照或预期结果一致，一律写回原始字节；检测到外部修改则拒绝回滚。
 
 ### 7.3 新建源文件
 
@@ -284,7 +285,7 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 
 ### 7.4 并发与冲突
 
-- 写入前比较文件 hash 与 mtime；发现外部修改则中止。
+- 写入前比较文件 hash；UTF-8 路径在应用编辑前、GB 字节路径在原子写入前均做复查，发现外部修改则中止。
 - 遇到 `EBUSY` / `EPERM` 重试 3 次，每次约 200ms；仍失败则提示关闭 Keil。
 - 备份保留最近若干份，放在扩展全局存储，不污染用户工程目录。
 - 不在用户工程中自动执行 `git commit`。
@@ -316,15 +317,17 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 |---|---|
 | `keilProject.addNewC` | 新建 C 文件并加入工程 |
 | `keilProject.addNewH` | 新建 H 文件并加入工程 |
+| `keilProject.addModule` | 创建模块文件夹（同名 `.c`/`.h`），仅 `.c` 加入工程 |
 | `keilProject.addExistingFiles` | 多选已有文件加入工程 |
 | `keilProject.selectProject` | 手动选择当前工程 |
 | `keilProject.createGroup` | 新建 Group（可被选择器复用） |
+| `keilProject.refreshView` | 刷新活动栏视图 |
 
 入口：
 
-- 资源管理器文件夹右键：新建 C/H；
-- 资源管理器文件多选右键：添加已有文件；
+- 活动栏“Keil 工程文件”面板（`keilProjectFiles.home` 视图，含视图标题栏按钮）；
 - 命令面板；
+- 命令一律不接收资源管理器上下文参数；资源管理器右键菜单入口已在发布版移除；
 - 不新增独立工程树，不向 Keil Assistant 添加菜单。
 
 流程使用原生 QuickPick / InputBox 分步完成；当前工程、Target、最近使用目录和目录编码选择保存在 `workspaceState`。
@@ -381,7 +384,10 @@ src/
   commands/
     addNewFile.ts
     addExistingFiles.ts
+    addModule.ts
     selectProject.ts
+    common.ts
+    index.ts
   core/
     model.ts
     parseProject.ts
@@ -391,14 +397,21 @@ src/
     paths.ts
     fileTypes.ts
     templates.ts
+    moduleTemplates.ts
     validate.ts
+    errors.ts
   adapters/
+    config.ts
     projectRepository.ts
     projectWriter.ts
+    sourceFiles.ts
+    state.ts
     ui.ts
+  views/
+    projectFilesView.ts
   i18n/
 test/
-  core/
+  unit/
   integration/
   fixtures/
 docs/
