@@ -1,5 +1,3 @@
-import type * as vscode from 'vscode';
-
 import { addExistingFiles } from './addExistingFiles';
 import { addModule } from './addModule';
 import { addNewFile } from './addNewFile';
@@ -9,20 +7,20 @@ import type { CommandDependencies } from './common';
 export class KeilCommands {
   public constructor(private readonly deps: CommandDependencies) {}
 
-  public addNewC(contextUri?: vscode.Uri): Promise<void> {
-    return addNewFile(this.deps, 'c', contextUri);
+  public addNewC(): Promise<void> {
+    return addNewFile(this.deps, 'c');
   }
 
-  public addNewH(contextUri?: vscode.Uri): Promise<void> {
-    return addNewFile(this.deps, 'h', contextUri);
+  public addNewH(): Promise<void> {
+    return addNewFile(this.deps, 'h');
   }
 
-  public addExistingFiles(uri?: vscode.Uri, selectedUris?: vscode.Uri[]): Promise<void> {
-    return addExistingFiles(this.deps, uri, selectedUris);
+  public addExistingFiles(): Promise<void> {
+    return addExistingFiles(this.deps);
   }
 
-  public addModule(contextUri?: vscode.Uri): Promise<void> {
-    return addModule(this.deps, contextUri);
+  public addModule(): Promise<void> {
+    return addModule(this.deps);
   }
 
   public selectProject(): Promise<void> {

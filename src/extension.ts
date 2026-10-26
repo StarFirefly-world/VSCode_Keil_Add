@@ -41,13 +41,10 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     }),
   );
 
-  const register = (
-    command: string,
-    handler: (...args: unknown[]) => Promise<void>,
-  ): void => {
+  const register = (command: string, handler: () => Promise<void>): void => {
     context.subscriptions.push(
-      vscode.commands.registerCommand(command, (...args: unknown[]) => {
-        void handler(...args).then(
+      vscode.commands.registerCommand(command, () => {
+        void handler().then(
           () => viewProvider.refresh(),
           (error: unknown) => {
             viewProvider.refresh();
@@ -71,21 +68,10 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     );
   };
 
-  register('keilProject.addNewC', (uri) =>
-    commands.addNewC(uri as vscode.Uri | undefined),
-  );
-  register('keilProject.addNewH', (uri) =>
-    commands.addNewH(uri as vscode.Uri | undefined),
-  );
-  register('keilProject.addExistingFiles', (uri, selectedUris) =>
-    commands.addExistingFiles(
-      uri as vscode.Uri | undefined,
-      selectedUris as vscode.Uri[] | undefined,
-    ),
-  );
-  register('keilProject.addModule', (uri) =>
-    commands.addModule(uri as vscode.Uri | undefined),
-  );
+  register('keilProject.addNewC', () => commands.addNewC());
+  register('keilProject.addNewH', () => commands.addNewH());
+  register('keilProject.addExistingFiles', () => commands.addExistingFiles());
+  register('keilProject.addModule', () => commands.addModule());
   register('keilProject.selectProject', () => commands.selectProject());
   register('keilProject.createGroup', () => commands.createGroup());
 

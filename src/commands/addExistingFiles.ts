@@ -29,11 +29,7 @@ function uniqueUris(uris: readonly vscode.Uri[]): vscode.Uri[] {
   return result;
 }
 
-export async function addExistingFiles(
-  deps: CommandDependencies,
-  uri?: vscode.Uri,
-  selectedUris?: vscode.Uri[],
-): Promise<void> {
+export async function addExistingFiles(deps: CommandDependencies): Promise<void> {
   const session = new ProjectSession(deps);
   const snapshot = await session.resolveProject();
   if (!snapshot) {
@@ -53,17 +49,7 @@ export async function addExistingFiles(
     return;
   }
 
-  let uris: vscode.Uri[] | undefined;
-  if (selectedUris && selectedUris.length > 0) {
-    uris = [...selectedUris];
-    if (uri) {
-      uris.push(uri);
-    }
-  } else if (uri) {
-    uris = [uri];
-  } else {
-    uris = await deps.ui.pickExistingFiles();
-  }
+  const uris = await deps.ui.pickExistingFiles();
   if (!uris || uris.length === 0) {
     return;
   }

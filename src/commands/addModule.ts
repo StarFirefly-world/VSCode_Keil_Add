@@ -106,7 +106,6 @@ async function cleanupModule(
 
 export async function addModule(
   deps: CommandDependencies,
-  contextUri?: vscode.Uri,
 ): Promise<void> {
   const session = new ProjectSession(deps);
   const snapshot = await session.resolveProject();
@@ -129,12 +128,7 @@ export async function addModule(
     return;
   }
 
-  const defaultDirectory = await session.defaultDirectory(
-    project,
-    target,
-    groupName,
-    contextUri,
-  );
+  const defaultDirectory = await session.defaultDirectory(project, target, groupName);
   const moduleRoot = moduleRootForProject(project.path);
   const parentDirectoryUri = await deps.ui.pickDirectory(
     vscode.Uri.file(defaultDirectory),

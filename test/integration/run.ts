@@ -142,6 +142,7 @@ interface FakeUiOptions {
   fileName?: string;
   moduleName?: string;
   moduleNames?: string[];
+  existingFiles?: vscode.Uri[];
   charset?: SourceCharset;
   confirm?: boolean;
   groupChoice?: GroupPick;
@@ -165,7 +166,7 @@ class FakeUi implements UiPort {
   }
 
   public async pickExistingFiles(): Promise<vscode.Uri[] | undefined> {
-    return undefined;
+    return this.options.existingFiles;
   }
 
   public async pickTarget(): Promise<string | undefined> {
@@ -378,7 +379,7 @@ describe('Keil Project Files integration', () => {
       charset: 'utf8',
     });
     try {
-      await new KeilCommands(env.deps).addNewC(vscode.Uri.file(temp.appDirectory));
+      await new KeilCommands(env.deps).addNewC();
 
       const createdPath = path.join(temp.appDirectory, 'app.c');
       const createdBytes = await fs.readFile(createdPath);
@@ -421,7 +422,7 @@ describe('Keil Project Files integration', () => {
       charset: 'utf8',
     });
     try {
-      await new KeilCommands(env.deps).addNewC(vscode.Uri.file(temp.appDirectory));
+      await new KeilCommands(env.deps).addNewC();
 
       const bytes = await fs.readFile(temp.projectPath);
       assert.deepEqual([...bytes.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
@@ -444,7 +445,7 @@ describe('Keil Project Files integration', () => {
     });
     env.config.autoOpen = 'utf8-only';
     try {
-      await new KeilCommands(env.deps).addNewH(vscode.Uri.file(temp.appDirectory));
+      await new KeilCommands(env.deps).addNewH();
 
       const createdPath = path.join(temp.appDirectory, '驱动.h');
       const createdBytes = await fs.readFile(createdPath);
@@ -478,7 +479,7 @@ describe('Keil Project Files integration', () => {
       charset: 'utf8',
     });
     try {
-      await new KeilCommands(env.deps).addNewC(vscode.Uri.file(outsideDirectory));
+      await new KeilCommands(env.deps).addNewC();
 
       const createdPath = path.join(outsideDirectory, 'led.c');
       assert.equal((await fs.stat(createdPath)).isFile(), true);
@@ -510,7 +511,7 @@ describe('Keil Project Files integration', () => {
       newGroupName: 'Drivers',
     });
     try {
-      await new KeilCommands(env.deps).addModule(vscode.Uri.file(temp.root));
+      await new KeilCommands(env.deps).addModule();
 
       const moduleDirectory = path.join(temp.root, 'motor');
       const header = await fs.readFile(path.join(moduleDirectory, 'motor.h'), 'utf8');
@@ -550,7 +551,7 @@ describe('Keil Project Files integration', () => {
       charset: 'utf8',
     });
     try {
-      await new KeilCommands(env.deps).addModule(vscode.Uri.file(temp.root));
+      await new KeilCommands(env.deps).addModule();
 
       assert.equal(
         await fs.readFile(path.join(existingDirectory, 'keep.txt'), 'utf8'),
@@ -593,10 +594,7 @@ describe('Keil Project Files integration', () => {
     );
     const originalProject = await fs.readFile(temp.projectPath);
     try {
-      await assert.rejects(
-        new KeilCommands(env.deps).addModule(vscode.Uri.file(temp.root)),
-        /模拟工程写入失败/,
-      );
+      await assert.rejects(new KeilCommands(env.deps).addModule(), /模拟工程写入失败/);
       await assert.rejects(fs.stat(path.join(temp.root, 'rollbackmod')), /ENOENT/);
       assert.equal((await fs.readFile(temp.projectPath)).equals(originalProject), true);
     } finally {
@@ -615,7 +613,7 @@ describe('Keil Project Files integration', () => {
       charset: 'utf8',
     });
     try {
-      await new KeilCommands(env.deps).addModule(vscode.Uri.file(outsideDirectory));
+      await new KeilCommands(env.deps).addModule();
 
       const moduleDirectory = path.join(outsideDirectory, 'motor');
       assert.equal((await fs.stat(path.join(moduleDirectory, 'motor.c'))).isFile(), true);
@@ -655,14 +653,15 @@ describe('Keil Project Files integration', () => {
 
     const env = createEnvironment(temp.projectPath, {
       directory: vscode.Uri.file(temp.appDirectory),
-      charset: 'utf8',
-    });
-    try {
-      await new KeilCommands(env.deps).addExistingFiles(vscode.Uri.file(fooPath), [
+      existingFiles: [
         vscode.Uri.file(fooPath),
         vscode.Uri.file(barPath),
         vscode.Uri.file(mainPath),
-      ]);
+      ],
+      charset: 'utf8',
+    });
+    try {
+      await new KeilCommands(env.deps).addExistingFiles();
 
       assert.equal(env.ui.previews.length, 1);
       assert.equal(env.ui.previews[0].files.length, 2);
@@ -679,9 +678,7 @@ describe('Keil Project Files integration', () => {
       assert.equal(await fs.readFile(barPath, 'utf8'), '#pragma once\n');
 
       const textAfterFirst = decoded.text;
-      await new KeilCommands(env.deps).addExistingFiles(vscode.Uri.file(fooPath), [
-        vscode.Uri.file(fooPath),
-      ]);
+      await new KeilCommands(env.deps).addExistingFiles();
       const textAfterSecond = (await fs.readFile(temp.projectPath)).toString('utf8');
       assert.equal(textAfterSecond, textAfterFirst);
       assert.ok(env.ui.warnings.some((message) => message.includes('没有可添加')));
@@ -723,10 +720,7 @@ describe('Keil Project Files integration', () => {
     );
     const originalProject = await fs.readFile(temp.projectPath);
     try {
-      await assert.rejects(
-        new KeilCommands(env.deps).addNewC(vscode.Uri.file(temp.appDirectory)),
-        /模拟工程写入失败/,
-      );
+      await assert.rejects(new KeilCommands(env.deps).addNewC(), /模拟工程写入失败/);
       await assert.rejects(fs.stat(path.join(temp.appDirectory, 'rollback.c')), /ENOENT/);
       const projectAfter = await fs.readFile(temp.projectPath);
       assert.equal(projectAfter.equals(originalProject), true);

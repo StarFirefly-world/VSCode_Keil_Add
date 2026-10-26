@@ -1,4 +1,3 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -130,19 +129,7 @@ export class ProjectSession {
     project: ProjectDocument,
     target: TargetNode,
     groupName: string,
-    contextUri?: vscode.Uri,
   ): Promise<string> {
-    if (contextUri) {
-      try {
-        const stat = await fs.stat(contextUri.fsPath);
-        if (stat.isDirectory()) {
-          return contextUri.fsPath;
-        }
-      } catch {
-        // Fall through to the group/project defaults.
-      }
-    }
-
     const group = findGroup(target, groupName);
     if (group) {
       const directories = group.files

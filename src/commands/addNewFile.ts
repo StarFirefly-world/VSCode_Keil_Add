@@ -61,7 +61,6 @@ async function chooseFileName(
 export async function addNewFile(
   deps: CommandDependencies,
   kind: TemplateKind,
-  contextUri?: vscode.Uri,
 ): Promise<void> {
   const session = new ProjectSession(deps);
   const snapshot = await session.resolveProject();
@@ -82,12 +81,7 @@ export async function addNewFile(
     return;
   }
 
-  const defaultDirectory = await session.defaultDirectory(
-    project,
-    target,
-    groupName,
-    contextUri,
-  );
+  const defaultDirectory = await session.defaultDirectory(project, target, groupName);
   const directoryUri = await deps.ui.pickDirectory(
     vscode.Uri.file(defaultDirectory),
     projectDirectoryUri(project),
