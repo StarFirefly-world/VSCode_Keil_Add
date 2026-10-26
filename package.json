@@ -93,28 +93,6 @@
       ]
     },
     "menus": {
-      "explorer/context": [
-        {
-          "command": "keilProject.addNewC",
-          "when": "explorerResourceIsFolder",
-          "group": "keil@1"
-        },
-        {
-          "command": "keilProject.addNewH",
-          "when": "explorerResourceIsFolder",
-          "group": "keil@2"
-        },
-        {
-          "command": "keilProject.addModule",
-          "when": "explorerResourceIsFolder",
-          "group": "keil@3"
-        },
-        {
-          "command": "keilProject.addExistingFiles",
-          "when": "!explorerResourceIsFolder",
-          "group": "keil@1"
-        }
-      ],
       "view/title": [
         {
           "command": "keilProject.addNewC",

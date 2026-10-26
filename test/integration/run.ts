@@ -259,6 +259,7 @@ interface ExtensionManifest {
     views?: Record<string, ViewContribution[]>;
     menus?: {
       'view/title'?: Array<{ command: string }>;
+      'explorer/context'?: Array<{ command: string }>;
     };
   };
 }
@@ -344,6 +345,11 @@ describe('Keil Project Files integration', () => {
         (menu) => menu.command === 'keilProject.addNewC',
       ),
       'view title should expose the new-file action',
+    );
+    assert.equal(
+      manifest.contributes?.menus?.['explorer/context']?.length ?? 0,
+      0,
+      'Explorer context menu entries should be removed',
     );
   });
 
