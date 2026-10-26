@@ -174,6 +174,10 @@ describe('source encoding detection', () => {
     expect(new TextDecoder('gb18030').decode(bytes)).toBe('// 中文');
     expect(decodeSourceText(bytes, 'gb2312')).toBe('// 中文');
   });
+
+  it('rejects characters that cannot be represented in GB2312/GBK', () => {
+    expect(() => encodeSourceText('// 😀', 'gb2312')).toThrow(/无法按选择的编码/);
+  });
 });
 
 describe('source encoding recommendation', () => {
