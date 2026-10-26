@@ -768,6 +768,50 @@ describe('Keil Project Files integration', () => {
     }
   });
 
+  it('aborts a GB byte write when the project changes between backup and write', async () => {
+    const temp = await createTempProject('gb2312');
+    const storage = path.join(os.tmpdir(), `keil-storage-${Date.now()}-${Math.random()}`);
+    try {
+      const repository = new ProjectRepository();
+      const snapshot: ProjectSnapshot = await repository.read(temp.projectPath);
+      const result = addFiles(snapshot.document, {
+        targetName: 'Debug',
+        groups: [
+          {
+            groupName: 'App',
+            files: [{ fileName: 'late.c', path: '.\\App\\late.c', fileType: 1 }],
+          },
+        ],
+      });
+      const externalBytes = encodeProjectText(
+        `${snapshot.document.text}<!-- external change -->`,
+        'gb2312',
+      );
+
+      const writer = new ProjectWriter(vscode.Uri.file(storage));
+      // Modify the file after writeInternal's verification, inside the backup
+      // step, so only writeBytes' pre-write re-check can catch it.
+      const patched = writer as unknown as {
+        createBackup: (snapshot: ProjectSnapshot) => Promise<string>;
+      };
+      patched.createBackup = async () => {
+        await fs.writeFile(temp.projectPath, externalBytes);
+        return '';
+      };
+
+      await assert.rejects(
+        writer.write(snapshot, result, true),
+        (error: unknown) =>
+          error instanceof KeilProjectError && /外部修改/.test(error.message),
+      );
+      assert.equal((await fs.readFile(temp.projectPath)).equals(externalBytes), true);
+    } finally {
+      await closeAllEditors();
+      await fs.rm(storage, { recursive: true, force: true }).catch(() => undefined);
+      await fs.rm(temp.root, { recursive: true, force: true }).catch(() => undefined);
+    }
+  });
+
   it('restores the original bytes when a save loses the UTF-8 BOM', async () => {
     const temp = await createTempProject('utf8');
     const crlfText = temp.projectText.replace(/\n/g, '\r\n');
@@ -806,7 +850,11 @@ describe('Keil Project Files integration', () => {
           error instanceof KeilProjectError && error.code === 'validation',
       );
       const after = await fs.readFile(temp.projectPath);
-      assert.equal(after.equals(bomBytes), true, 'BOM and original bytes must be restored');
+      assert.equal(
+        after.equals(bomBytes),
+        true,
+        'BOM and original bytes must be restored',
+      );
     } finally {
       await closeAllEditors();
       await fs.rm(storage, { recursive: true, force: true }).catch(() => undefined);

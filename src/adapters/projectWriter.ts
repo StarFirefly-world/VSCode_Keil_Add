@@ -257,6 +257,10 @@ export class ProjectWriter implements ProjectWriterPort {
     snapshot: ProjectSnapshot,
     result: AddFilesResult,
   ): Promise<void> {
+    // Re-check right before overwriting so a change that happened after the
+    // verification in writeInternal (e.g. while the backup was written) is
+    // not silently clobbered by the byte write.
+    await this.assertUnchanged(snapshot);
     const bytes = encodeProjectText(result.text, snapshot.document.charset);
     await this.atomicWrite(snapshot.path, bytes, snapshot.mode);
   }

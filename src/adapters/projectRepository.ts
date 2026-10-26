@@ -12,7 +12,6 @@ export interface ProjectSnapshot {
   path: string;
   bytes: Buffer;
   hash: string;
-  mtimeMs: number;
   mode: number;
   document: ProjectDocument;
 }
@@ -115,7 +114,6 @@ export class ProjectRepository implements ProjectRepositoryPort {
       path: absolutePath,
       bytes,
       hash: hashBytes(bytes),
-      mtimeMs: stat.mtimeMs,
       mode: stat.mode,
       document,
     };
