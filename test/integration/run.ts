@@ -387,6 +387,37 @@ describe('Keil Project Files integration', () => {
     }
   });
 
+  it('creates files in a sibling folder outside the project directory', async () => {
+    const temp = await createTempProject('utf8');
+    const outsideDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'keil-hardware-'));
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(outsideDirectory),
+      fileName: 'led',
+      charset: 'utf8',
+    });
+    try {
+      await new KeilCommands(env.deps).addNewC(vscode.Uri.file(outsideDirectory));
+
+      const createdPath = path.join(outsideDirectory, 'led.c');
+      assert.equal((await fs.stat(createdPath)).isFile(), true);
+
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const entry = updated.targets[0].groups[0].files.find(
+        (file) => file.name === 'led.c',
+      );
+      assert.ok(entry);
+      assert.ok(entry.path.startsWith('..\\'));
+      assert.equal(path.resolve(path.dirname(temp.projectPath), entry.path), createdPath);
+      assert.ok(env.ui.warnings.some((message) => message.includes('工程目录之外')));
+    } finally {
+      await fs
+        .rm(outsideDirectory, { recursive: true, force: true })
+        .catch(() => undefined);
+      await cleanup(temp, env.storage);
+    }
+  });
+
   it('adds multiple existing files and skips duplicates', async () => {
     const temp = await createTempProject('utf8');
     const drivers = path.join(temp.root, 'Drivers');

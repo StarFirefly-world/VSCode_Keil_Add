@@ -15,6 +15,7 @@
 - 自动扫描工作区 `.uvprojx`，多工程时记住当前工程；
 - 单 Target 自动选择，多 Target 记住上次选择，一次只修改一个 Target；
 - 支持新建 Group，Group 是 Keil 虚拟分组，不推断磁盘目录；
+- 支持工程目录之外的源文件：同盘写入 `..\` 相对路径，跨盘符使用绝对路径并提示；
 - 同一 Target 内按规范化绝对路径去重，Windows 下忽略大小写和斜杠差异；
 - 工程文件支持 UTF-8、UTF-8 BOM、GB2312、GBK、GB18030，写回保持原编码；
 - 新源文件支持 UTF-8 或 GB2312/GBK，默认根据目标目录、Group、工程的多数编码推断；
@@ -32,6 +33,37 @@
 4. 文件创建成功后写入 `.uvprojx`。
 
 UTF-8 文件可直接打开；GB2312/GBK 文件默认不自动打开，编辑前请使用 VS Code 的 **Reopen with Encoding** 选择 `GBK` 或 `GB18030`。
+
+### 工程目录外的文件
+
+文件所在磁盘目录与 Keil Group 是两件独立的事：
+
+- **目录** 决定源文件实际创建/引用在哪里；
+- **Group** 只是 `.uvprojx` 中的虚拟分组，不会创建或改变磁盘目录。
+
+因此可以把文件放在工程文件所在目录之外。例如：
+
+```text
+D:\MyProject\
+  MDK-ARM\
+    MyProject.uvprojx
+  HARDWARE\
+    led.c
+```
+
+在 `HARDWARE` 中新建 `led.c` 并选择/创建 Keil Group `HARDWARE` 后，写入的条目是：
+
+```xml
+<FilePath>..\HARDWARE\led.c</FilePath>
+```
+
+操作方式：
+
+1. 如果 `HARDWARE` 与工程目录同在 VS Code 工作区内，直接右键 `HARDWARE` 文件夹新建文件；
+2. 如果 `HARDWARE` 不在当前工作区，可执行命令面板中的新建命令，在“选择新文件所在目录”步骤选择 **选择其他目录…** 定位到该文件夹；
+3. 也可以在 VS Code 中使用 **File: Add Folder to Workspace** 把 `HARDWARE` 加入工作区后再右键。
+
+同盘目录使用 `..\` 相对路径；不同盘符会写入绝对路径并给出提示。工程外的头文件不会自动加入 Include Path，需要在 Keil 中手动添加例如 `..\HARDWARE`。
 
 ### 添加已有文件
 
