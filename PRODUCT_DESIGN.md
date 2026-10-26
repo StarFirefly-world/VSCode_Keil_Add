@@ -1,6 +1,6 @@
 # Keil Project Files 产品设计文档
 
-> 版本：v0.1（方向稿）  
+> 版本：v0.2（方向稿）  
 > 日期：2026-10-26  
 > 状态：待评审
 
@@ -55,6 +55,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 | 决策项 | 结论 |
 |---|---|
 | Keil 版本 | MDK5 ARM，`.uvprojx` |
+| 工程文件编码 | UTF-8、GB2312/GBK；写回时保持原编码 |
 | 插件形态 | 独立扩展 |
 | 工程范围 | 一次只修改一个“当前工程” |
 | Target 范围 | 一次只修改一个 Target；单 Target 自动选择，多 Target 首次询问并记住 |
@@ -83,6 +84,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 | 新建 Group | 在 Group 选择器中直接创建新分组 |
 | 重复检测 | 同一 Target 内按规范化路径去重，避免重复编译 |
 | 安全写入 | 最小化 XML 插入、写前校验、写后校验、失败回滚 |
+| 编码兼容 | 支持 UTF-8 与 GB2312/GBK 工程文件，写回保持原编码 |
 | 路径处理 | 相对工程文件路径、Windows 分隔符、中文/空格/XML 特殊字符 |
 | 错误提示 | 工程损坏、文件被占用、只读、路径异常等给出明确提示 |
 
@@ -162,7 +164,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 ### 10.4 文件与头文件
 
 - 新建文件时校验非法文件名和覆盖风险。
-- 新文件默认 UTF-8 无 BOM，可在设置中调整。
+- 新文件支持 UTF-8 与 GB2312，默认跟随当前工程文件的编码，可在设置中覆盖。
 - 把 `.h` 加入工程不会自动加入 Include Path；如新目录不在 Include Path 中，需要提示。
 - 添加已有文件只建立引用，不复制文件。
 
@@ -180,7 +182,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 | 设置 | 默认值 | 说明 |
 |---|---|---|
 | `keilProject.projectFile` | 自动 | 手动指定当前工程路径 |
-| `keilProject.newFileEncoding` | `utf8` | 新建源文件编码 |
+| `keilProject.newFileEncoding` | `auto` | 新建源文件编码：`auto` / `utf8` / `gb2312` |
 | `keilProject.addHeaderToProject` | `true` | 新建 H 文件时默认加入工程 |
 | `keilProject.backupProjectFile` | `true` | 修改前备份工程文件 |
 | `keilProject.template.c` / `.h` | 内置模板 | 新建文件模板 |
@@ -190,7 +192,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 
 - **可靠性**：任何失败都不能留下损坏的工程文件。
 - **性能**：工程解析和修改应在数百毫秒内完成；扩展按需激活。
-- **兼容性**：Windows 10/11；VS Code 主流版本；Keil MDK5 ARM。
+- **兼容性**：Windows 10/11；VS Code 主流版本；Keil MDK5 ARM；UTF-8 / GB2312 工程文件。
 - **隐私**：不联网、不上传工程内容、不收集遥测。
 - **可维护性**：核心解析/修改逻辑与 VS Code UI 解耦，便于单元测试。
 - **可用性**：中文优先，文案集中管理，后续可扩展英文。
@@ -204,6 +206,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 | Keil Assistant 内部结构变化 | 右键菜单失效 | 仅作为增强功能，做好降级，不形成硬依赖 |
 | Include Path 未更新 | 编译找不到头文件 | 明确提示，后续提供自动添加功能 |
 | 多 Target 误改 | 构建配置不一致 | 一次只改选中 Target，并记忆选择 |
+| GB2312 工程被转码或乱码 | 工程损坏、中文内容丢失 | 保持原字节编码；写入前 round-trip 校验；失败回滚 |
 | 用户期待删除/移动文件 | 功能不完整 | 首版明确边界，后续迭代 |
 
 ## 14. 里程碑
@@ -223,6 +226,7 @@ Keil Assistant 已经可以在 VS Code 中展示 Keil 工程树、编译和下�
 - 修改后的 `.uvprojx` 除新增条目外，原内容、编码、换行符和缩进保持不变。
 - 模拟写入失败或被占用时，工程文件保持原样。
 - 中文、空格、`&` 等文件名和路径可以正常处理。
+- UTF-8 与 GB2312 工程文件修改后编码保持不变，中文不出现乱码。
 - 单元测试、集成测试和手工验收全部通过后才交付。
 
 ## 16. 待定事项
