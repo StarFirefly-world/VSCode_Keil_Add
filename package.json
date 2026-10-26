@@ -24,36 +24,67 @@
     "onCommand:keilProject.addNewH",
     "onCommand:keilProject.addExistingFiles",
     "onCommand:keilProject.selectProject",
-    "onCommand:keilProject.createGroup"
+    "onCommand:keilProject.createGroup",
+    "onCommand:keilProject.refreshView",
+    "onView:keilProjectFiles.home"
   ],
   "contributes": {
     "commands": [
       {
         "command": "keilProject.addNewC",
         "title": "新建 Keil C 文件",
-        "category": "Keil Project Files"
+        "category": "Keil Project Files",
+        "icon": "$(new-file)"
       },
       {
         "command": "keilProject.addNewH",
         "title": "新建 Keil H 文件",
-        "category": "Keil Project Files"
+        "category": "Keil Project Files",
+        "icon": "$(new-file)"
       },
       {
         "command": "keilProject.addExistingFiles",
         "title": "添加到 Keil 工程",
-        "category": "Keil Project Files"
+        "category": "Keil Project Files",
+        "icon": "$(files)"
       },
       {
         "command": "keilProject.selectProject",
         "title": "选择当前 Keil 工程",
-        "category": "Keil Project Files"
+        "category": "Keil Project Files",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "keilProject.createGroup",
         "title": "新建 Keil Group",
-        "category": "Keil Project Files"
+        "category": "Keil Project Files",
+        "icon": "$(add)"
+      },
+      {
+        "command": "keilProject.refreshView",
+        "title": "刷新 Keil 工程文件视图",
+        "category": "Keil Project Files",
+        "icon": "$(refresh)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "keilProjectFiles",
+          "title": "Keil 工程文件",
+          "icon": "$(project)"
+        }
+      ]
+    },
+    "views": {
+      "keilProjectFiles": [
+        {
+          "id": "keilProjectFiles.home",
+          "name": "工程与操作",
+          "contextualTitle": "Keil 工程文件"
+        }
+      ]
+    },
     "menus": {
       "explorer/context": [
         {
@@ -70,6 +101,28 @@
           "command": "keilProject.addExistingFiles",
           "when": "!explorerResourceIsFolder",
           "group": "keil@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "keilProject.addNewC",
+          "when": "view == keilProjectFiles.home",
+          "group": "navigation@1"
+        },
+        {
+          "command": "keilProject.addExistingFiles",
+          "when": "view == keilProjectFiles.home",
+          "group": "navigation@2"
+        },
+        {
+          "command": "keilProject.selectProject",
+          "when": "view == keilProjectFiles.home",
+          "group": "navigation@3"
+        },
+        {
+          "command": "keilProject.refreshView",
+          "when": "view == keilProjectFiles.home",
+          "group": "navigation@4"
         }
       ]
     },

@@ -23,6 +23,8 @@ import {
 import { KeilProjectError } from '../../src/core/errors';
 import type { SourceCharset } from '../../src/core/model';
 import { parseProject } from '../../src/core/parseProject';
+import { t } from '../../src/i18n';
+import { ProjectFilesViewProvider } from '../../src/views/projectFilesView';
 
 const EMPTY_FILES_BLOCK = '<Files>\n          </Files>';
 
@@ -229,6 +231,33 @@ interface TestEnvironment {
   storage: string;
 }
 
+interface ViewContainerContribution {
+  id: string;
+  title: string;
+  icon: string;
+}
+
+interface ViewContribution {
+  id: string;
+  name: string;
+}
+
+interface ExtensionManifest {
+  contributes?: {
+    viewsContainers?: {
+      activitybar?: ViewContainerContribution[];
+    };
+    views?: Record<string, ViewContribution[]>;
+    menus?: {
+      'view/title'?: Array<{ command: string }>;
+    };
+  };
+}
+
+function treeItemLabel(item: vscode.TreeItem): string {
+  return typeof item.label === 'string' ? item.label : (item.label?.label ?? '');
+}
+
 function createEnvironment(
   projectPath: string,
   options: FakeUiOptions = {},
@@ -283,9 +312,45 @@ describe('Keil Project Files integration', () => {
       'keilProject.addExistingFiles',
       'keilProject.selectProject',
       'keilProject.createGroup',
+      'keilProject.refreshView',
     ]) {
       assert.ok(commands.includes(command), `${command} should be registered`);
     }
+
+    const manifest = extension.packageJSON as ExtensionManifest;
+    const container = manifest.contributes?.viewsContainers?.activitybar?.find(
+      (candidate) => candidate.id === 'keilProjectFiles',
+    );
+    assert.ok(container, 'activity bar container should be contributed');
+    assert.equal(container.title, 'Keil 工程文件');
+    assert.ok(
+      manifest.contributes?.views?.keilProjectFiles?.some(
+        (view) => view.id === 'keilProjectFiles.home',
+      ),
+      'view should be contributed',
+    );
+    assert.ok(
+      manifest.contributes?.menus?.['view/title']?.some(
+        (menu) => menu.command === 'keilProject.addNewC',
+      ),
+      'view title should expose the new-file action',
+    );
+  });
+
+  it('provides sidebar actions without acting as a project tree', async () => {
+    const provider = new ProjectFilesViewProvider(
+      new MemoryState(),
+      new FakeConfig(''),
+      new ProjectRepository(),
+    );
+    const items = await provider.getChildren();
+    const labels = items.map(treeItemLabel);
+    assert.ok(labels.includes(t.view.noProject));
+    assert.ok(labels.includes(t.view.newC));
+    assert.ok(labels.includes(t.view.newH));
+    assert.ok(labels.includes(t.view.addExisting));
+    assert.ok(items.some((item) => item.command?.command === 'keilProject.addNewC'));
+    assert.deepEqual(await provider.getChildren(items[0]), []);
   });
 
   it('creates a UTF-8 C file through the full command flow', async () => {

@@ -9,6 +9,7 @@ import { VSCodeUi } from './adapters/ui';
 import { KeilCommands, type CommandDependencies } from './commands';
 import { KeilProjectError } from './core/errors';
 import { t } from './i18n';
+import { ProjectFilesViewProvider } from './views/projectFilesView';
 
 export interface ExtensionApi {
   commands: KeilCommands;
@@ -19,15 +20,26 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   context.subscriptions.push(output);
 
   const ui = new VSCodeUi();
+  const state = new WorkspaceState(context.workspaceState);
+  const config = new VSCodeConfig();
+  const repository = new ProjectRepository();
   const dependencies: CommandDependencies = {
-    repository: new ProjectRepository(),
+    repository,
     writer: new ProjectWriter(context.globalStorageUri),
     sourceFiles: new SourceFileService(),
-    state: new WorkspaceState(context.workspaceState),
-    config: new VSCodeConfig(),
+    state,
+    config,
     ui,
   };
   const commands = new KeilCommands(dependencies);
+
+  const viewProvider = new ProjectFilesViewProvider(state, config, repository);
+  context.subscriptions.push(
+    vscode.window.createTreeView('keilProjectFiles.home', {
+      treeDataProvider: viewProvider,
+      showCollapseAll: false,
+    }),
+  );
 
   const register = (
     command: string,
@@ -35,22 +47,26 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   ): void => {
     context.subscriptions.push(
       vscode.commands.registerCommand(command, (...args: unknown[]) => {
-        void handler(...args).catch((error: unknown) => {
-          if (error instanceof KeilProjectError && error.code === 'cancelled') {
-            return;
-          }
-          output.appendLine(`[${new Date().toISOString()}] ${command} failed`);
-          output.appendLine(
-            error instanceof Error ? (error.stack ?? error.message) : String(error),
-          );
-          ui.showError(
-            error instanceof KeilProjectError
-              ? error.message
-              : t.commands.operationFailed(
-                  error instanceof Error ? error.message : String(error),
-                ),
-          );
-        });
+        void handler(...args).then(
+          () => viewProvider.refresh(),
+          (error: unknown) => {
+            viewProvider.refresh();
+            if (error instanceof KeilProjectError && error.code === 'cancelled') {
+              return;
+            }
+            output.appendLine(`[${new Date().toISOString()}] ${command} failed`);
+            output.appendLine(
+              error instanceof Error ? (error.stack ?? error.message) : String(error),
+            );
+            ui.showError(
+              error instanceof KeilProjectError
+                ? error.message
+                : t.commands.operationFailed(
+                    error instanceof Error ? error.message : String(error),
+                  ),
+            );
+          },
+        );
       }),
     );
   };
@@ -69,6 +85,19 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   );
   register('keilProject.selectProject', () => commands.selectProject());
   register('keilProject.createGroup', () => commands.createGroup());
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('keilProject.refreshView', () => {
+      viewProvider.refresh();
+    }),
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('keilProject')) {
+        viewProvider.refresh();
+      }
+    }),
+  );
 
   return { commands };
 }
