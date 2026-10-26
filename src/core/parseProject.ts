@@ -253,7 +253,12 @@ export function parseProject(
         currentGroup.filesClose = closeStart >= 0 ? closeStart : undefined;
       }
     } else if (tag.name === 'Group' && currentGroup && currentTarget) {
-      currentGroup.groupClose = closeStart;
+      if (frame && frame.selfClosing) {
+        currentGroup.groupClose = findSelfClosingTagStart(text, parser.position, tag.name);
+        currentGroup.groupIsSelfClosing = true;
+      } else {
+        currentGroup.groupClose = closeStart;
+      }
       if (currentGroup.name.length === 0) {
         currentGroup.name = `Group ${currentTarget.groups.length + 1}`;
       }

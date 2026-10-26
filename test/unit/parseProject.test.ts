@@ -126,4 +126,34 @@ describe('parseProject', () => {
       text.slice(project.targets[0].groupsClose!, project.targets[0].groupsClose! + 10),
     ).toBe('<Groups />');
   });
+
+  it('detects a self-closing Group tag and names it by position', () => {
+    const text = `<Project>
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files>
+            <File>
+              <FileName>main.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\\main.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group />
+      </Groups>
+    </Target>
+  </Targets>
+</Project>
+`;
+    const project = parseProject(text, PROJECT);
+    const groups = project.targets[0].groups;
+    expect(groups.map((group) => group.name)).toEqual(['App', 'Group 2']);
+    expect(groups[1].files).toEqual([]);
+    expect(groups[1].groupIsSelfClosing).toBe(true);
+    expect(text.slice(groups[1].groupClose, groups[1].groupClose + 9)).toBe('<Group />');
+  });
 });

@@ -228,7 +228,24 @@ export function addFiles(
     }
 
     filesAdded += group.files.length;
-    if (existingGroup.filesClose !== undefined) {
+    if (existingGroup.groupIsSelfClosing) {
+      const close = closeLineInfo(project.text, existingGroup.groupClose);
+      const groupIndent = close.indent + project.indentUnit;
+      const lines = [
+        `${groupIndent}<GroupName>${xmlEscape(group.groupName)}</GroupName>`,
+        ...filesBlock(group.files, groupIndent, project.indentUnit),
+      ];
+      insertions.push(
+        buildSelfClosingReplacement(
+          existingGroup.groupClose,
+          close,
+          project.eol,
+          lines,
+          project.text,
+          'Group',
+        ),
+      );
+    } else if (existingGroup.filesClose !== undefined) {
       const close = closeLineInfo(project.text, existingGroup.filesClose);
       const fileIndent = close.indent + project.indentUnit;
       const lines: string[] = [];

@@ -11,12 +11,14 @@ export interface FileNode {
 export interface GroupNode {
   name: string;
   files: FileNode[];
-  /** Offset of the `<` in `</Group>`. */
+  /** Offset of the `<` in `</Group>`, or in `<Group/>` when self-closing. */
   groupClose: number;
   /** Offset of the `<` in `</Files>`, if a `<Files>` element exists. */
   filesClose?: number;
   /** True when `<Files>` is self-closing (`<Files />`). */
   filesIsSelfClosing?: boolean;
+  /** True when the group itself is self-closing (`<Group />`). */
+  groupIsSelfClosing?: boolean;
 }
 
 export interface TargetNode {

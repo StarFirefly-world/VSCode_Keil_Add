@@ -374,4 +374,41 @@ describe('addFiles', () => {
     const updated = parseProject(result.text, PROJECT);
     expect(updated.targets[0].groups.map((group) => group.name)).toEqual(['App']);
   });
+
+  it('replaces a self-closing Group tag when adding files to it', () => {
+    const text = `<Project>
+  <Targets>
+    <Target>
+      <TargetName>Debug</TargetName>
+      <Groups>
+        <Group />
+      </Groups>
+    </Target>
+  </Targets>
+</Project>
+`;
+    const original = project(text);
+    const result = addFiles(original, {
+      targetName: 'Debug',
+      groups: [
+        {
+          groupName: 'Group 1',
+          files: [{ fileName: 'a.c', path: '.\\App\\a.c', fileType: 1 }],
+        },
+      ],
+    });
+
+    expect(result.text).not.toContain('<Group />');
+    expect(result.text).toContain('<Group>');
+    expect(result.text).toContain('</Group>');
+    expect(result.text).toContain('<GroupName>Group 1</GroupName>');
+    expect(result.text).toContain('<FileName>a.c</FileName>');
+    expect(result.filesAdded).toBe(1);
+    expect(result.groupsCreated).toEqual([]);
+
+    const updated = parseProject(result.text, PROJECT);
+    expect(updated.targets[0].groups).toHaveLength(1);
+    expect(updated.targets[0].groups[0].name).toBe('Group 1');
+    expect(updated.targets[0].groups[0].files.map((file) => file.name)).toEqual(['a.c']);
+  });
 });
