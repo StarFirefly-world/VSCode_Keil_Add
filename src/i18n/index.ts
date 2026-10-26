@@ -109,8 +109,10 @@ export const t = {
       `模块文件夹已存在，不会覆盖：${moduleDirectory}`,
     duplicateSource: (fileName: string) =>
       `文件 "${fileName}" 已在当前 Target 中，无法创建同名模块。`,
-    outsideRoot: (root: string, selected: string) =>
-      `模块父文件夹必须位于工程文件夹内（${root}）。当前选择：${selected}`,
+    outsideProjectWarning: (sourcePath: string) =>
+      `模块位于工程文件所在目录之外，工程中将使用 ..\\ 相对路径：${sourcePath}`,
+    differentDriveWarning: (sourcePath: string) =>
+      `模块位于其他盘符，工程中将写入绝对路径：${sourcePath}。工程换机或换盘后需要重新调整此路径。`,
     created: (
       moduleName: string,
       targetName: string,

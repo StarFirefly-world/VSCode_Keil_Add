@@ -12,12 +12,7 @@ import {
   validateModuleName,
 } from '../core/moduleTemplates';
 import { findTarget } from '../core/parseProject';
-import {
-  isPathInsideDirectory,
-  overallProjectRoot,
-  resolveProjectEntryPath,
-  toKeilPath,
-} from '../core/paths';
+import { overallProjectRoot, resolveProjectEntryPath, toKeilPath } from '../core/paths';
 import { t } from '../i18n';
 import {
   chooseSourceEncoding,
@@ -141,11 +136,8 @@ export async function addModule(
     contextUri,
   );
   const moduleRoot = moduleRootForProject(project.path);
-  const initialDirectory = isPathInsideDirectory(moduleRoot, defaultDirectory)
-    ? defaultDirectory
-    : path.dirname(project.path);
   const parentDirectoryUri = await deps.ui.pickDirectory(
-    vscode.Uri.file(initialDirectory),
+    vscode.Uri.file(defaultDirectory),
     vscode.Uri.file(moduleRoot),
     'module',
   );
@@ -153,12 +145,6 @@ export async function addModule(
     return;
   }
   await ensureDirectory(parentDirectoryUri);
-  if (!isPathInsideDirectory(moduleRoot, parentDirectoryUri.fsPath)) {
-    throw new KeilProjectError(
-      'io',
-      t.module.outsideRoot(moduleRoot, parentDirectoryUri.fsPath),
-    );
-  }
 
   const moduleName = await chooseModuleName(
     deps,
@@ -188,6 +174,11 @@ export async function addModule(
   const headerText = renderModuleHeader(moduleName, project.eol);
   const sourceText = renderModuleSource(moduleName, project.eol);
   const keilPathInfo = toKeilPath(project.path, sourcePath);
+  if (keilPathInfo.differentDrive) {
+    deps.ui.showWarning(t.module.differentDriveWarning(sourcePath));
+  } else if (keilPathInfo.outsideProject) {
+    deps.ui.showWarning(t.module.outsideProjectWarning(sourcePath));
+  }
   const result = addFiles(project, {
     targetName,
     groups: [

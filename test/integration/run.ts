@@ -598,7 +598,7 @@ describe('Keil Project Files integration', () => {
     }
   });
 
-  it('rejects module folders outside the project root', async () => {
+  it('allows module folders outside the project and uses a .. relative path', async () => {
     const temp = await createTempProject('utf8');
     const outsideDirectory = await fs.mkdtemp(
       path.join(os.tmpdir(), 'keil-module-outside-'),
@@ -609,11 +609,26 @@ describe('Keil Project Files integration', () => {
       charset: 'utf8',
     });
     try {
-      await assert.rejects(
-        new KeilCommands(env.deps).addModule(vscode.Uri.file(outsideDirectory)),
-        /工程文件夹内/,
+      await new KeilCommands(env.deps).addModule(vscode.Uri.file(outsideDirectory));
+
+      const moduleDirectory = path.join(outsideDirectory, 'motor');
+      assert.equal((await fs.stat(path.join(moduleDirectory, 'motor.c'))).isFile(), true);
+      assert.equal((await fs.stat(path.join(moduleDirectory, 'motor.h'))).isFile(), true);
+
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const entry = updated.targets[0].groups
+        .flatMap((group) => group.files)
+        .find((file) => file.name === 'motor.c');
+      assert.ok(entry);
+      assert.ok(entry.path.startsWith('..\\'));
+      assert.equal(
+        path.resolve(path.dirname(temp.projectPath), entry.path),
+        path.join(moduleDirectory, 'motor.c'),
       );
-      await assert.rejects(fs.stat(path.join(outsideDirectory, 'motor')), /ENOENT/);
+      assert.ok(
+        env.ui.warnings.some((message) => message.includes('工程文件所在目录之外')),
+      );
     } finally {
       await fs
         .rm(outsideDirectory, { recursive: true, force: true })
