@@ -381,6 +381,7 @@ export class ProjectWriter implements ProjectWriterPort {
     }
 
     if (snapshotHash(current) === snapshot.hash) {
+      await this.revertOpenDocument(snapshot.path);
       return;
     }
 
@@ -388,6 +389,7 @@ export class ProjectWriter implements ProjectWriterPort {
     try {
       currentText = decodeProjectBytes(current).text;
     } catch (error) {
+      await this.revertOpenDocument(snapshot.path);
       throw new KeilProjectError(
         'conflict',
         '写入失败后工程文件内容已无法识别，可能被其他程序修改，未自动覆盖。',
@@ -396,9 +398,11 @@ export class ProjectWriter implements ProjectWriterPort {
     }
 
     if (currentText === snapshot.document.text) {
+      await this.revertOpenDocument(snapshot.path);
       return;
     }
     if (currentText !== result.text) {
+      await this.revertOpenDocument(snapshot.path);
       throw new KeilProjectError(
         'conflict',
         '写入失败后检测到工程文件被其他程序修改，未自动回滚，以免覆盖外部修改。',
@@ -414,17 +418,18 @@ export class ProjectWriter implements ProjectWriterPort {
       }
     }
     await this.atomicWrite(snapshot.path, bytes, snapshot.mode);
+    await this.revertOpenDocument(snapshot.path);
+  }
 
-    const document = this.findOpenDocument(snapshot.path);
-    if (document) {
-      try {
-        await vscode.commands.executeCommand(
-          'workbench.action.files.revert',
-          document.uri,
-        );
-      } catch {
-        // The user can reload the document manually if revert is unavailable.
-      }
+  private async revertOpenDocument(filePath: string): Promise<void> {
+    const document = this.findOpenDocument(filePath);
+    if (!document || !document.isDirty) {
+      return;
+    }
+    try {
+      await vscode.commands.executeCommand('workbench.action.files.revert', document.uri);
+    } catch {
+      // The user can reload the document manually if revert is unavailable.
     }
   }
 }
