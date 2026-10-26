@@ -403,11 +403,7 @@ export class ProjectWriter implements ProjectWriterPort {
       );
     }
 
-    if (currentText === snapshot.document.text) {
-      await this.revertOpenDocument(snapshot.path);
-      return;
-    }
-    if (currentText !== result.text) {
+    if (currentText !== result.text && currentText !== snapshot.document.text) {
       await this.revertOpenDocument(snapshot.path);
       throw new KeilProjectError(
         'conflict',
@@ -415,6 +411,8 @@ export class ProjectWriter implements ProjectWriterPort {
       );
     }
 
+    // Text equality alone is not enough: the bytes may still diverge (for
+    // example a lost UTF-8 BOM), so the original bytes are always restored.
     let bytes = snapshot.bytes;
     if (backupPath) {
       try {

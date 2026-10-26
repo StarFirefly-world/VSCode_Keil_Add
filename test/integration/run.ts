@@ -767,4 +767,50 @@ describe('Keil Project Files integration', () => {
       await fs.rm(temp.root, { recursive: true, force: true }).catch(() => undefined);
     }
   });
+
+  it('restores the original bytes when a save loses the UTF-8 BOM', async () => {
+    const temp = await createTempProject('utf8');
+    const crlfText = temp.projectText.replace(/\n/g, '\r\n');
+    const bomBytes = Buffer.concat([
+      Buffer.from([0xef, 0xbb, 0xbf]),
+      Buffer.from(crlfText, 'utf8'),
+    ]);
+    await fs.writeFile(temp.projectPath, bomBytes);
+    const storage = path.join(os.tmpdir(), `keil-storage-${Date.now()}-${Math.random()}`);
+    try {
+      const repository = new ProjectRepository();
+      const snapshot: ProjectSnapshot = await repository.read(temp.projectPath);
+      assert.equal(snapshot.document.charset, 'utf8bom');
+      const result = addFiles(snapshot.document, {
+        targetName: 'Debug',
+        groups: [
+          {
+            groupName: 'App',
+            files: [{ fileName: 'bom.c', path: '.\\App\\bom.c', fileType: 1 }],
+          },
+        ],
+      });
+
+      // Simulate an editor save that writes the text without the BOM.
+      const writer = new ProjectWriter(vscode.Uri.file(storage));
+      const patched = writer as unknown as {
+        writeWithWorkspaceEdit: () => Promise<void>;
+      };
+      patched.writeWithWorkspaceEdit = async () => {
+        await fs.writeFile(snapshot.path, Buffer.from(result.text, 'utf8'));
+      };
+
+      await assert.rejects(
+        writer.write(snapshot, result, true),
+        (error: unknown) =>
+          error instanceof KeilProjectError && error.code === 'validation',
+      );
+      const after = await fs.readFile(temp.projectPath);
+      assert.equal(after.equals(bomBytes), true, 'BOM and original bytes must be restored');
+    } finally {
+      await closeAllEditors();
+      await fs.rm(storage, { recursive: true, force: true }).catch(() => undefined);
+      await fs.rm(temp.root, { recursive: true, force: true }).catch(() => undefined);
+    }
+  });
 });
