@@ -26,6 +26,99 @@ function decodeGbStrict(buffer: Uint8Array, label = 'gb18030'): string {
   return new TextDecoder(label, { fatal: true }).decode(buffer);
 }
 
+/**
+ * Validates that the buffer only contains byte sequences allowed by the
+ * specific GB charset. Node's TextDecoder treats gb2312/gbk/gb18030 as
+ * aliases, so this check is required to honour the declared encoding.
+ */
+function validateGbByteSequences(
+  buffer: Buffer,
+  charset: 'gb2312' | 'gbk' | 'gb18030',
+): void {
+  let index = 0;
+  while (index < buffer.length) {
+    const first = buffer[index];
+    if (first <= 0x7f) {
+      index += 1;
+      continue;
+    }
+
+    if (charset === 'gb2312') {
+      if (
+        index + 1 >= buffer.length ||
+        buffer[index + 1] < 0xa1 ||
+        buffer[index + 1] > 0xfe ||
+        first < 0xa1 ||
+        first > 0xfe
+      ) {
+        throw new KeilProjectError(
+          'encoding',
+          'XML 声明为 GB2312，但文件包含非 GB2312 字节。',
+        );
+      }
+      index += 2;
+      continue;
+    }
+
+    if (charset === 'gbk') {
+      if (
+        index + 1 >= buffer.length ||
+        first < 0x81 ||
+        first > 0xfe ||
+        buffer[index + 1] < 0x40 ||
+        buffer[index + 1] === 0x7f ||
+        buffer[index + 1] > 0xfe
+      ) {
+        throw new KeilProjectError(
+          'encoding',
+          'XML 声明为 GBK，但文件包含非 GBK 字节（可能是 GB18030 四字节字符）。',
+        );
+      }
+      index += 2;
+      continue;
+    }
+
+    // gb18030
+    if (index + 1 >= buffer.length) {
+      throw new KeilProjectError('encoding', 'GB18030 编码字节不完整。');
+    }
+    const second = buffer[index + 1];
+    if (second >= 0x30 && second <= 0x39) {
+      // Four-byte sequence: 81-FE / 30-39 / 81-FE / 30-39
+      if (
+        index + 3 >= buffer.length ||
+        first < 0x81 ||
+        first > 0xfe ||
+        buffer[index + 2] < 0x81 ||
+        buffer[index + 2] > 0xfe ||
+        buffer[index + 3] < 0x30 ||
+        buffer[index + 3] > 0x39
+      ) {
+        throw new KeilProjectError(
+          'encoding',
+          'XML 声明为 GB18030，但文件包含无效的四字节序列。',
+        );
+      }
+      index += 4;
+    } else {
+      // Double-byte sequence: 81-FE / 40-FE (excluding 0x7F)
+      if (
+        first < 0x81 ||
+        first > 0xfe ||
+        second < 0x40 ||
+        second === 0x7f ||
+        second > 0xfe
+      ) {
+        throw new KeilProjectError(
+          'encoding',
+          'XML 声明为 GB18030，但文件包含无效的双字节序列。',
+        );
+      }
+      index += 2;
+    }
+  }
+}
+
 function declarationEncoding(buffer: Buffer): string | undefined {
   const prefix = buffer.subarray(0, Math.min(buffer.length, 1024)).toString('latin1');
   const match = /<\?xml[^>]*\bencoding\s*=\s*["']([^"']+)["']/i.exec(prefix);
@@ -116,12 +209,22 @@ export function decodeProjectBytes(bytes: Uint8Array): DecodedProjectFile {
         `工程文件带 UTF-8 BOM，但 XML 声明为 ${declared}，声明与实际编码不一致。`,
       );
     }
+    if (encoding !== 'gb2312' && encoding !== 'gbk' && encoding !== 'gb18030') {
+      throw new KeilProjectError(
+        'encoding',
+        `不支持的工程文件编码声明：${declared}`,
+      );
+    }
     try {
+      validateGbByteSequences(content, encoding);
       return {
         text: decodeGbStrict(content),
         charset: encoding,
       };
     } catch (error) {
+      if (error instanceof KeilProjectError) {
+        throw error;
+      }
       throw new KeilProjectError(
         'encoding',
         `XML 声明为 ${declared}，但文件内容无法按该编码解码。`,
@@ -165,8 +268,8 @@ export function decodeProjectBytes(bytes: Uint8Array): DecodedProjectFile {
   }
 }
 
-function encodeGb(text: string): Buffer {
-  return iconv.encode(text, 'gb18030');
+function encodeGb(text: string, charset: 'gb2312' | 'gbk' | 'gb18030'): Buffer {
+  return iconv.encode(text, charset);
 }
 
 export function encodeProjectText(text: string, charset: ProjectCharset): Buffer {
@@ -176,7 +279,7 @@ export function encodeProjectText(text: string, charset: ProjectCharset): Buffer
   } else if (charset === 'utf8bom') {
     bytes = Buffer.concat([UTF8_BOM, Buffer.from(text, 'utf8')]);
   } else {
-    bytes = encodeGb(text);
+    bytes = encodeGb(text, charset);
   }
 
   let decoded: string;
@@ -185,9 +288,13 @@ export function encodeProjectText(text: string, charset: ProjectCharset): Buffer
       const content = charset === 'utf8bom' ? bytes.subarray(UTF8_BOM.length) : bytes;
       decoded = decodeUtf8Strict(content);
     } else {
+      validateGbByteSequences(bytes, charset);
       decoded = decodeGbStrict(bytes);
     }
   } catch (error) {
+    if (error instanceof KeilProjectError) {
+      throw error;
+    }
     throw new KeilProjectError(
       'encoding',
       '工程文件内容无法按原编码写回，已中止。',
