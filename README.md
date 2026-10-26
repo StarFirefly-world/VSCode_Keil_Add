@@ -1,5 +1,7 @@
 # Keil Project Files
 
+> English: A VS Code extension for Keil MDK5 ARM projects. Create `.c` / `.h` files, add existing files, and insert them into the correct Target / Group of `.uvprojx` — without leaving VS Code.
+
 在 VS Code 中完成 Keil MDK5 ARM 工程的三件事：
 
 1. 新建 `.c` / `.h` 文件；
@@ -7,6 +9,33 @@
 3. 让文件在 Keil Assistant 和 Keil 工程树中可见。
 
 本扩展只负责“建文件 + 写工程 + 让文件可见”，**不做**编译、下载、调试、代码编辑、Include Path 维护、文件删除/移动/重命名。
+
+## 安装
+
+### 方式一：从 VSIX 安装（推荐）
+
+1. 下载本仓库 Releases 中的 `keil-project-files-*.vsix`；
+2. 在 VS Code 中按 `Ctrl+Shift+P`（macOS `Cmd+Shift+P`），输入并选择 **Extensions: Install from VSIX...**；
+3. 选择下载的 `.vsix` 文件即可。
+
+### 方式二：从源码运行
+
+```bash
+git clone https://github.com/StarFirefly-world/VSCode_Keil_Add.git
+cd VSCode_Keil_Add
+npm install
+npm run compile
+```
+
+然后按 `F5` 启动扩展开发宿主，或运行 `npm run package` 生成 VSIX。
+
+## 快速开始
+
+1. 用 VS Code 打开包含 `.uvprojx` 的工作区；
+2. 点击左侧活动栏的 **Keil 工程文件** 图标；
+3. 选择 **选择当前工程…**，插件会自动扫描工作区内的 `.uvprojx`；
+4. 点击 **新建 Keil C 文件** / **添加已有文件…** 等命令，按提示选择 Target、Group、目录和编码；
+5. 完成后在 Keil Assistant 或 Keil 中切换/刷新 Target，即可看到新增文件。
 
 ## 功能
 

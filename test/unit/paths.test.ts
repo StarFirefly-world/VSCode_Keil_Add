@@ -74,11 +74,10 @@ describe('paths', () => {
   });
 
   it('allows sibling source folders beside a USER project directory', () => {
-    const project =
-      'D:\\Keil5\\StmF4\\Task\\ZHD_MD_STM32_V1.00_20261026\\USER\\demo.uvprojx';
-    const workspace = 'D:\\Keil5\\StmF4\\Task\\ZHD_MD_STM32_V1.00_20261026\\USER';
+    const project = 'D:\\Projects\\DemoProject\\USER\\demo.uvprojx';
+    const workspace = 'D:\\Projects\\DemoProject\\USER';
     expect(overallProjectRoot(project, workspace)).toBe(
-      'D:\\Keil5\\StmF4\\Task\\ZHD_MD_STM32_V1.00_20261026',
+      'D:\\Projects\\DemoProject',
     );
   });
 
