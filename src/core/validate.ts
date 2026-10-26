@@ -170,10 +170,3 @@ export function validateAddFilesResult(
     }
   }
 }
-
-/** Checks the text read back from disk after a write. */
-export function validateWrittenText(writtenText: string, expected: AddFilesResult): void {
-  if (writtenText !== expected.text) {
-    throw new KeilProjectError('validation', '写回后的工程文件内容与预期不一致。');
-  }
-}

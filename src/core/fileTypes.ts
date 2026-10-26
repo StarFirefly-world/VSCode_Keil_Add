@@ -21,28 +21,3 @@ export function fileTypeForPath(filePath: string): number | undefined {
   }
   return EXTENSION_TO_FILE_TYPE[baseName.slice(dot).toLowerCase()];
 }
-
-export function isSupportedFile(filePath: string): boolean {
-  return fileTypeForPath(filePath) !== undefined;
-}
-
-export function isHeaderFile(filePath: string): boolean {
-  return filePath.toLowerCase().endsWith('.h');
-}
-
-export function fileTypeLabel(fileType: number): string {
-  switch (fileType) {
-    case 1:
-      return 'C Source';
-    case 2:
-      return 'Assembly';
-    case 4:
-      return 'Library';
-    case 5:
-      return 'Header/Text';
-    case 8:
-      return 'C++ Source';
-    default:
-      return `FileType ${fileType}`;
-  }
-}

@@ -10,7 +10,7 @@ import {
   validateFileName,
   xmlEscape,
 } from '../../src/core/paths';
-import { fileTypeForPath, isSupportedFile } from '../../src/core/fileTypes';
+import { fileTypeForPath } from '../../src/core/fileTypes';
 import { includeGuardFor, renderSourceTemplate } from '../../src/core/templates';
 
 const PROJECT = 'D:\\work\\demo\\demo.uvprojx';
@@ -127,7 +127,6 @@ describe('file types', () => {
 
   it('rejects unknown extensions', () => {
     expect(fileTypeForPath('main.rs')).toBeUndefined();
-    expect(isSupportedFile('main.rs')).toBe(false);
   });
 });
 

@@ -367,25 +367,6 @@ export function decodeSourceText(bytes: Uint8Array, charset: SourceCharset): str
   }
 }
 
-export function projectCharsetLabel(charset: ProjectCharset): string {
-  switch (charset) {
-    case 'utf8':
-      return 'UTF-8';
-    case 'utf8bom':
-      return 'UTF-8 BOM';
-    case 'gb2312':
-      return 'GB2312';
-    case 'gbk':
-      return 'GBK';
-    case 'gb18030':
-      return 'GB18030';
-  }
-}
-
-export function sourceCharsetLabel(charset: SourceCharset): string {
-  return charset === 'utf8' ? 'UTF-8' : 'GB2312/GBK';
-}
-
 export function isGbProjectCharset(charset: ProjectCharset): boolean {
   return charset === 'gb2312' || charset === 'gbk' || charset === 'gb18030';
 }
