@@ -19,9 +19,24 @@ describe('parseProject', () => {
     const debug = project.targets[0];
     expect(debug.groups.map((group) => group.name)).toEqual(['App', 'Drivers']);
     expect(debug.groups[0].files).toEqual([
-      { name: 'main.c', fileType: 1, path: '.\\App\\main.c' },
-      { name: 'util.h', fileType: 5, path: '.\\App\\util.h' },
+      {
+        name: 'main.c',
+        fileType: 1,
+        path: '.\\App\\main.c',
+        start: expect.any(Number),
+        end: expect.any(Number),
+      },
+      {
+        name: 'util.h',
+        fileType: 5,
+        path: '.\\App\\util.h',
+        start: expect.any(Number),
+        end: expect.any(Number),
+      },
     ]);
+    const firstFile = debug.groups[0].files[0];
+    expect(text.slice(firstFile.start, firstFile.start + 6)).toBe('<File>');
+    expect(text.slice(firstFile.end - 7, firstFile.end)).toBe('</File>');
 
     expect(debug.targetClose).toBeGreaterThan(0);
     expect(text.slice(debug.targetClose, debug.targetClose + 9)).toBe('</Target>');

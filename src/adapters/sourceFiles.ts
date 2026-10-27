@@ -10,6 +10,7 @@ import { t } from '../i18n';
 const MAX_SAMPLE_SIZE = 5 * 1024 * 1024;
 const MAX_DIRECTORY_SAMPLES = 500;
 const MAX_PROJECT_SAMPLES = 1000;
+const MAX_MODULE_FILES = 2000;
 const READ_BATCH_SIZE = 32;
 
 export interface CreatedSourceFile {
@@ -20,6 +21,8 @@ export interface CreatedSourceFile {
 export interface SourceFilesPort {
   createDirectory(directoryPath: string): Promise<void>;
   removeDirectoryIfEmpty(directoryPath: string): Promise<boolean>;
+  listFilesRecursive(directoryPath: string): Promise<string[]>;
+  deleteDirectory(directoryPath: string): Promise<void>;
   createFile(
     filePath: string,
     text: string,
@@ -89,6 +92,61 @@ export class SourceFileService implements SourceFilesPort {
       return true;
     } catch (error) {
       return isNodeError(error) && error.code === 'ENOENT';
+    }
+  }
+
+  public async listFilesRecursive(directoryPath: string): Promise<string[]> {
+    const files: string[] = [];
+    const visit = async (current: string): Promise<void> => {
+      let entries: Dirent[];
+      try {
+        entries = await fs.readdir(current, { withFileTypes: true });
+      } catch (error) {
+        throw new KeilProjectError('io', `读取模块目录失败：${current}`, error);
+      }
+      for (const entry of entries) {
+        const entryPath = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          await visit(entryPath);
+        } else {
+          files.push(entryPath);
+        }
+        if (files.length > MAX_MODULE_FILES) {
+          throw new KeilProjectError(
+            'io',
+            `模块目录中的文件过多（超过 ${MAX_MODULE_FILES} 个），已中止。`,
+          );
+        }
+      }
+    };
+    await visit(directoryPath);
+    files.sort((a, b) => a.localeCompare(b));
+    return files;
+  }
+
+  public async deleteDirectory(directoryPath: string): Promise<void> {
+    try {
+      await fs.rm(directoryPath, {
+        recursive: true,
+        force: false,
+        maxRetries: 2,
+        retryDelay: 150,
+      });
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return;
+      }
+      if (
+        isNodeError(error) &&
+        (error.code === 'EBUSY' || error.code === 'EPERM' || error.code === 'EACCES')
+      ) {
+        throw new KeilProjectError(
+          'busy',
+          `无法删除模块文件夹（被占用或只读）：${directoryPath}`,
+          error,
+        );
+      }
+      throw new KeilProjectError('io', `删除模块文件夹失败：${directoryPath}`, error);
     }
   }
 

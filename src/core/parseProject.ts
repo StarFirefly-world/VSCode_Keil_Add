@@ -19,6 +19,8 @@ interface MutableFile {
   name: string;
   fileType: number;
   path: string;
+  start: number;
+  end: number;
 }
 
 function escapeRegExp(text: string): string {
@@ -108,6 +110,21 @@ function findSelfClosingTagStart(
   throw new KeilProjectError('parse', `无法定位 <${tagName}/> 的字符位置。`);
 }
 
+function findOpenTagStart(text: string, position: number, tagName: string): number {
+  const escaped = escapeRegExp(tagName);
+  const openPrefix = new RegExp(`^<${escaped}(?=[\\s/>])`);
+  for (
+    let candidate = text.lastIndexOf('<', position - 1);
+    candidate >= 0;
+    candidate = text.lastIndexOf('<', candidate - 1)
+  ) {
+    if (openPrefix.test(text.slice(candidate))) {
+      return candidate;
+    }
+  }
+  throw new KeilProjectError('parse', `无法定位 <${tagName}> 的字符位置。`);
+}
+
 /**
  * Parses a `.uvprojx` document and records the positions needed for minimal
  * text insertions. The parser never attempts to repair malformed XML.
@@ -171,7 +188,13 @@ export function parseProject(
     } else if (tag.name === 'GroupName' && currentGroup) {
       groupName = '';
     } else if (tag.name === 'File' && currentGroup) {
-      currentFile = { name: '', fileType: 5, path: '' };
+      currentFile = {
+        name: '',
+        fileType: 5,
+        path: '',
+        start: findOpenTagStart(text, parser.position, tag.name),
+        end: parser.position,
+      };
       currentFileField = null;
     } else if (tag.name === 'FileName' && currentFile) {
       currentFileField = 'name';
@@ -241,6 +264,8 @@ export function parseProject(
         name: currentFile.name.trim(),
         fileType: currentFile.fileType,
         path: currentFile.path.trim(),
+        start: currentFile.start,
+        end: parser.position,
       } satisfies FileNode);
       currentFile = undefined;
       currentFileField = null;

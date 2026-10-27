@@ -10,7 +10,7 @@ import {
   isGbProjectCharset,
 } from '../core/encoding';
 import { KeilProjectError, isNodeError } from '../core/errors';
-import type { AddFilesResult } from '../core/model';
+import type { ProjectEditResult } from '../core/model';
 import { parseProject } from '../core/parseProject';
 import { isSamePath } from '../core/paths';
 import { t } from '../i18n';
@@ -24,7 +24,7 @@ export interface WriteResult {
 export interface ProjectWriterPort {
   write(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
     backupEnabled: boolean,
   ): Promise<WriteResult>;
 }
@@ -71,7 +71,7 @@ export class ProjectWriter implements ProjectWriterPort {
 
   public write(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
     backupEnabled: boolean,
   ): Promise<WriteResult> {
     const operation = this.writeQueue.then(() =>
@@ -86,7 +86,7 @@ export class ProjectWriter implements ProjectWriterPort {
 
   private async writeInternal(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
     backupEnabled: boolean,
   ): Promise<WriteResult> {
     const openDocument = this.findOpenDocument(snapshot.path);
@@ -211,7 +211,7 @@ export class ProjectWriter implements ProjectWriterPort {
 
   private async writeWithWorkspaceEdit(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
     openDocument: vscode.TextDocument | undefined,
   ): Promise<void> {
     const uri = vscode.Uri.file(snapshot.path);
@@ -255,7 +255,7 @@ export class ProjectWriter implements ProjectWriterPort {
 
   private async writeBytes(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
   ): Promise<void> {
     // Re-check right before overwriting so a change that happened after the
     // verification in writeInternal (e.g. while the backup was written) is
@@ -304,7 +304,7 @@ export class ProjectWriter implements ProjectWriterPort {
 
   private async verifyWrittenFile(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
   ): Promise<void> {
     const bytes = await readFileMapped(snapshot.path);
     const decoded = decodeProjectBytes(bytes);
@@ -376,7 +376,7 @@ export class ProjectWriter implements ProjectWriterPort {
 
   private async rollbackIfNeeded(
     snapshot: ProjectSnapshot,
-    result: AddFilesResult,
+    result: ProjectEditResult,
     backupPath: string | undefined,
   ): Promise<void> {
     let current: Buffer;

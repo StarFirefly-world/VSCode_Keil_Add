@@ -1,6 +1,6 @@
 # Keil Project Files 技术方案
 
-> 版本：v1.2  
+> 版本：v1.3  
 > 对应产品文档：[PRODUCT_DESIGN.md](../PRODUCT_DESIGN.md)  
 > 状态：已实现（0.1.0），本文档与当前实现对齐
 
@@ -12,7 +12,7 @@
 2. 把新文件或已有文件加入 `.uvprojx` 的指定 Target / Group；
 3. 让文件在 Keil Assistant 和 Keil 工程树中可见。
 
-明确不做：编译、下载、调试、源代码编辑/重构、Include Path 维护、文件删除/移动/重命名、工程树、文件夹递归添加、多 Target 批量修改、Keil Assistant 深度集成。“添加模块”是上述 1 + 2 的组合入口：一次生成同名 `.c`/`.h` 与模块文件夹，仅 `.c` 入工程。
+明确不做：编译、下载、调试、源代码编辑/重构、Include Path 维护、任意文件删除/移动/重命名、工程树、文件夹递归添加、多 Target 批量修改、Keil Assistant 深度集成。“添加模块”是上述 1 + 2 的组合入口：一次生成同名 `.c`/`.h` 与模块文件夹，仅 `.c` 入工程。“删除模块”是受控例外：删除模块文件夹，并跨 Target 清理该目录的工程引用。
 
 技术前提：
 
@@ -104,6 +104,8 @@ interface FileNode {
   name: string;
   fileType: number;
   path: string;
+  start: number; // <File> 起始偏移
+  end: number;   // </File> 或 <File/> 结束后的偏移
 }
 
 interface EncodingRecommendation {
@@ -160,6 +162,8 @@ interface EncodingRecommendation {
 3. 原有文件条目一个不少；
 4. 除插入点外，前后文本保持不变；
 5. 目标 Group 内没有重复路径。
+
+删除模块时复用 `TextInsertion` 的 `offset` + `length` 表示文本替换：删除整个 `<File>` 行，或在内联 XML 中只删除标签范围。删除后重新解析，校验未删除的文件条目仍存在、文件条目数量正确、换行符不变，并确认该模块目录在工程中不再有引用。
 
 写入后再从磁盘读回并重复校验，失败则用备份恢复。
 
@@ -321,6 +325,7 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 | `keilProject.addNewC` | 新建 C 文件并加入工程 |
 | `keilProject.addNewH` | 新建 H 文件并加入工程 |
 | `keilProject.addModule` | 创建模块文件夹（同名 `.c`/`.h`），仅 `.c` 加入工程 |
+| `keilProject.deleteModule` | 删除模块文件夹，并从所有 Target / Group 中移除该目录的工程条目 |
 | `keilProject.addExistingFiles` | 多选已有文件加入工程 |
 | `keilProject.selectProject` | 手动选择当前工程 |
 | `keilProject.setProjectRoot` | 设置当前工程的总工程文件夹，或恢复自动推断 |
@@ -369,6 +374,7 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 - GB2312 工程文件字节写入；
 - GB2312 新文件不自动打开；
 - 工程更新失败时删除刚创建的文件；
+- 删除模块：文件夹与所有 Target 中的工程条目一并清理；取消确认不删除；非模块目录拒绝；
 - 设置、恢复总工程文件夹，并验证目录选择器使用该根目录；
 - 临时工作区 + 最小 `.uvprojx` fixture。
 
@@ -390,6 +396,7 @@ src/
     addNewFile.ts
     addExistingFiles.ts
     addModule.ts
+    deleteModule.ts
     selectProject.ts
     setProjectRoot.ts
     common.ts
@@ -398,6 +405,7 @@ src/
     model.ts
     parseProject.ts
     addFiles.ts
+    removeFiles.ts
     encoding.ts
     sourceEncoding.ts
     paths.ts

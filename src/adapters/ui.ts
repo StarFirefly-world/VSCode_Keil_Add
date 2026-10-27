@@ -1,7 +1,11 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import type { EncodingRecommendation, SourceCharset } from '../core/model';
+import type {
+  EncodingRecommendation,
+  RemovedFileEntry,
+  SourceCharset,
+} from '../core/model';
 import { validateModuleName } from '../core/moduleTemplates';
 import { encodingCountsLabel } from '../core/sourceEncoding';
 import { t } from '../i18n';
@@ -14,6 +18,22 @@ export interface AddPreview {
   files: Array<{ fileName: string; path: string }>;
   skipped: Array<{ fileName: string; reason: string }>;
   warnings: string[];
+}
+
+export interface ModuleDeleteCandidate {
+  directoryPath: string;
+  moduleName: string;
+  targetNames: string[];
+  groupNames: string[];
+  fileCount: number;
+}
+
+export interface DeleteModulePreview {
+  moduleName: string;
+  directoryPath: string;
+  /** Paths relative to the module directory. */
+  files: string[];
+  entries: RemovedFileEntry[];
 }
 
 export interface UiPort {
@@ -35,6 +55,11 @@ export interface UiPort {
     currentRoot: string | undefined,
     inferredRoot: string,
   ): Promise<string | null | undefined>;
+  pickModuleToDelete(
+    candidates: ModuleDeleteCandidate[],
+    defaultDirectory: string,
+  ): Promise<string | undefined>;
+  confirmDeleteModule(preview: DeleteModulePreview): Promise<boolean>;
   inputFileName(extension: '.c' | '.h'): Promise<string | undefined>;
   inputModuleName(): Promise<string | undefined>;
   pickEncoding(
@@ -64,6 +89,11 @@ interface DirectoryItem extends vscode.QuickPickItem {
 
 interface ProjectRootItem extends vscode.QuickPickItem {
   action?: 'choose' | 'auto';
+}
+
+interface ModuleDeleteItem extends vscode.QuickPickItem {
+  directoryPath?: string;
+  browse?: boolean;
 }
 
 interface EncodingItem extends vscode.QuickPickItem {
@@ -317,6 +347,82 @@ export class VSCodeUi implements UiPort {
       defaultUri: vscode.Uri.file(currentRoot ?? inferredRoot),
     });
     return folders?.[0]?.fsPath;
+  }
+
+  public async pickModuleToDelete(
+    candidates: ModuleDeleteCandidate[],
+    defaultDirectory: string,
+  ): Promise<string | undefined> {
+    const items: ModuleDeleteItem[] = candidates.map((candidate) => ({
+      label: path.win32.basename(candidate.directoryPath) || candidate.directoryPath,
+      description: t.module.deleteCandidateDescription(
+        candidate.targetNames.join('、'),
+        candidate.groupNames.join('、'),
+      ),
+      detail: t.module.deleteCandidateDetail(
+        candidate.directoryPath,
+        candidate.fileCount,
+      ),
+      directoryPath: candidate.directoryPath,
+    }));
+    items.push({
+      label: t.module.deleteBrowseLabel,
+      browse: true,
+    });
+
+    const picked = await vscode.window.showQuickPick(items, {
+      title: t.module.deletePickTitle,
+      placeHolder: t.module.deletePickPlaceholder,
+      ignoreFocusOut: true,
+    });
+    if (!picked) {
+      return undefined;
+    }
+    if (picked.browse) {
+      const folders = await vscode.window.showOpenDialog({
+        title: t.module.deleteDialogTitle,
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        defaultUri: vscode.Uri.file(defaultDirectory),
+      });
+      return folders?.[0]?.fsPath;
+    }
+    return picked.directoryPath;
+  }
+
+  public async confirmDeleteModule(preview: DeleteModulePreview): Promise<boolean> {
+    const lines: string[] = [
+      t.module.deleteConfirmFolder(preview.directoryPath),
+      '',
+      t.module.deleteFilesHeader(preview.files.length),
+    ];
+    for (const file of preview.files.slice(0, 40)) {
+      lines.push(`  ✗ ${file}`);
+    }
+    if (preview.files.length > 40) {
+      lines.push(`  … 其余 ${preview.files.length - 40} 个文件`);
+    }
+    lines.push('');
+    if (preview.entries.length === 0) {
+      lines.push(t.module.deleteNoEntries);
+    } else {
+      lines.push(t.module.deleteEntriesHeader(preview.entries.length));
+      for (const entry of preview.entries.slice(0, 30)) {
+        lines.push(`  ${entry.targetName} / ${entry.groupName}: ${entry.projectPath}`);
+      }
+      if (preview.entries.length > 30) {
+        lines.push(`  … 其余 ${preview.entries.length - 30} 个工程条目`);
+      }
+    }
+    lines.push('', t.module.deleteWarning);
+
+    const answer = await vscode.window.showWarningMessage(
+      t.module.deleteConfirmTitle(preview.moduleName),
+      { modal: true, detail: lines.join('\n') },
+      t.buttons.deleteModule,
+    );
+    return answer === t.buttons.deleteModule;
   }
 
   public async inputFileName(extension: '.c' | '.h'): Promise<string | undefined> {

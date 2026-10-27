@@ -12,7 +12,13 @@ import {
 import { ProjectWriter, type ProjectWriterPort } from '../../src/adapters/projectWriter';
 import { SourceFileService } from '../../src/adapters/sourceFiles';
 import type { StatePort } from '../../src/adapters/state';
-import type { AddPreview, GroupPick, UiPort } from '../../src/adapters/ui';
+import type {
+  AddPreview,
+  DeleteModulePreview,
+  GroupPick,
+  ModuleDeleteCandidate,
+  UiPort,
+} from '../../src/adapters/ui';
 import { KeilCommands, type CommandDependencies } from '../../src/commands';
 import { addFiles } from '../../src/core/addFiles';
 import {
@@ -165,6 +171,8 @@ interface FakeUiOptions {
   groupChoice?: GroupPick;
   newGroupName?: string;
   projectRootChoice?: string | null;
+  moduleDeleteChoice?: string;
+  confirmDelete?: boolean;
 }
 
 class FakeUi implements UiPort {
@@ -172,12 +180,18 @@ class FakeUi implements UiPort {
   public readonly warnings: string[] = [];
   public readonly errors: string[] = [];
   public readonly previews: AddPreview[] = [];
+  public readonly deletePreviews: DeleteModulePreview[] = [];
+  public readonly deleteCandidates: ModuleDeleteCandidate[][] = [];
   public projectRootChoice: string | null | undefined;
+  public moduleDeleteChoice: string | undefined;
+  public confirmDeleteResult: boolean;
   public lastDefaultDirectory: string | undefined;
   public lastRootDirectory: string | undefined;
 
   public constructor(private readonly options: FakeUiOptions = {}) {
     this.projectRootChoice = options.projectRootChoice;
+    this.moduleDeleteChoice = options.moduleDeleteChoice;
+    this.confirmDeleteResult = options.confirmDelete ?? true;
   }
 
   public async pickProject(): Promise<string | undefined> {
@@ -221,6 +235,18 @@ class FakeUi implements UiPort {
 
   public async pickProjectRoot(): Promise<string | null | undefined> {
     return this.projectRootChoice;
+  }
+
+  public async pickModuleToDelete(
+    candidates: ModuleDeleteCandidate[],
+  ): Promise<string | undefined> {
+    this.deleteCandidates.push(candidates);
+    return this.moduleDeleteChoice ?? candidates[0]?.directoryPath;
+  }
+
+  public async confirmDeleteModule(preview: DeleteModulePreview): Promise<boolean> {
+    this.deletePreviews.push(preview);
+    return this.confirmDeleteResult;
   }
 
   public async inputFileName(): Promise<string | undefined> {
@@ -331,7 +357,7 @@ async function closeAllEditors(): Promise<void> {
   } catch {
     // Nothing to close in the test host.
   }
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
 async function cleanup(temp: TempProject, storage: string): Promise<void> {
@@ -352,6 +378,7 @@ describe('Keil Project Files integration', () => {
       'keilProject.addNewC',
       'keilProject.addNewH',
       'keilProject.addModule',
+      'keilProject.deleteModule',
       'keilProject.addExistingFiles',
       'keilProject.setProjectRoot',
       'keilProject.selectProject',
@@ -398,6 +425,7 @@ describe('Keil Project Files integration', () => {
     assert.ok(labels.includes(t.view.newC));
     assert.ok(labels.includes(t.view.newH));
     assert.ok(labels.includes(t.view.addModule));
+    assert.ok(labels.includes(t.view.deleteModule));
     assert.ok(labels.includes(t.view.addExisting));
     assert.ok(items.some((item) => item.command?.command === 'keilProject.addNewC'));
     assert.deepEqual(await provider.getChildren(items[0]), []);
@@ -739,6 +767,123 @@ describe('Keil Project Files integration', () => {
       await fs
         .rm(outsideDirectory, { recursive: true, force: true })
         .catch(() => undefined);
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('deletes a module folder and removes its project entries', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.root),
+      moduleName: 'motor',
+      charset: 'utf8',
+      groupChoice: { kind: 'create' },
+      newGroupName: 'Drivers',
+    });
+    try {
+      await new KeilCommands(env.deps).addModule();
+      const moduleDirectory = path.join(temp.root, 'motor');
+      env.ui.moduleDeleteChoice = moduleDirectory;
+
+      await new KeilCommands(env.deps).deleteModule();
+
+      await assert.rejects(fs.stat(moduleDirectory), /ENOENT/);
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const names = updated.targets[0].groups
+        .flatMap((group) => group.files)
+        .map((file) => file.name);
+      assert.equal(names.includes('motor.c'), false);
+      assert.equal(names.includes('motor.h'), false);
+      const drivers = updated.targets[0].groups.find((group) => group.name === 'Drivers');
+      assert.ok(drivers);
+      assert.deepEqual(drivers.files, []);
+
+      assert.equal(env.ui.deleteCandidates[0].length, 1);
+      assert.equal(
+        env.ui.deleteCandidates[0][0].directoryPath.toLowerCase(),
+        moduleDirectory.toLowerCase(),
+      );
+      assert.deepEqual(
+        env.ui.deletePreviews[0].entries.map((entry) => entry.targetName),
+        ['Debug'],
+      );
+      assert.deepEqual(env.ui.deletePreviews[0].files, ['motor.c', 'motor.h']);
+      assert.ok(env.ui.infos.some((message) => message.includes('已删除模块')));
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('keeps the module when deletion is cancelled', async () => {
+    const temp = await createTempProject('utf8');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.root),
+      moduleName: 'cancelmod',
+      charset: 'utf8',
+      confirmDelete: false,
+    });
+    try {
+      await new KeilCommands(env.deps).addModule();
+      const moduleDirectory = path.join(temp.root, 'cancelmod');
+      env.ui.moduleDeleteChoice = moduleDirectory;
+      const before = await fs.readFile(temp.projectPath);
+
+      await new KeilCommands(env.deps).deleteModule();
+
+      assert.equal(
+        (await fs.stat(path.join(moduleDirectory, 'cancelmod.c'))).isFile(),
+        true,
+      );
+      assert.equal((await fs.readFile(temp.projectPath)).equals(before), true);
+      assert.equal(env.ui.deletePreviews.length, 1);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('deletes a module from a GB2312 project without changing encoding', async () => {
+    const temp = await createTempProject('gb2312');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.root),
+      moduleName: 'gbmod',
+      charset: 'gb2312',
+      groupChoice: { kind: 'create' },
+      newGroupName: 'Modules',
+    });
+    try {
+      await new KeilCommands(env.deps).addModule();
+      const moduleDirectory = path.join(temp.root, 'gbmod');
+      env.ui.moduleDeleteChoice = moduleDirectory;
+
+      await new KeilCommands(env.deps).deleteModule();
+
+      await assert.rejects(fs.stat(moduleDirectory), /ENOENT/);
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      assert.equal(decoded.charset, 'gb2312');
+      assert.match(decoded.text, /中文注释：必须保持原样/);
+      const updated = parseProject(decoded.text, temp.projectPath);
+      const names = updated.targets[0].groups
+        .flatMap((group) => group.files)
+        .map((file) => file.name);
+      assert.equal(names.includes('gbmod.c'), false);
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('refuses to delete a folder that is not a module folder', async () => {
+    const temp = await createTempProject('utf8');
+    const plainDirectory = path.join(temp.root, 'plain');
+    await fs.mkdir(plainDirectory);
+    await fs.writeFile(path.join(plainDirectory, 'other.c'), 'int other;\n');
+    const env = createEnvironment(temp.projectPath, {
+      moduleDeleteChoice: plainDirectory,
+    });
+    try {
+      await assert.rejects(new KeilCommands(env.deps).deleteModule(), /不是模块文件夹/);
+      assert.equal((await fs.stat(path.join(plainDirectory, 'other.c'))).isFile(), true);
+    } finally {
       await cleanup(temp, env.storage);
     }
   });

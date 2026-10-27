@@ -6,6 +6,10 @@ export interface FileNode {
   name: string;
   fileType: number;
   path: string;
+  /** Offset of the `<` in the `<File>` opening tag. */
+  start: number;
+  /** Offset immediately after the closing `</File>` or self-closing `<File/>`. */
+  end: number;
 }
 
 export interface GroupNode {
@@ -68,11 +72,28 @@ export interface TextInsertion {
   length?: number;
 }
 
-export interface AddFilesResult {
+/** Minimal edits against the original project text. */
+export interface ProjectEditResult {
   text: string;
   insertions: TextInsertion[];
+}
+
+export interface AddFilesResult extends ProjectEditResult {
   groupsCreated: string[];
   filesAdded: number;
+}
+
+export interface RemovedFileEntry {
+  targetName: string;
+  groupName: string;
+  fileName: string;
+  projectPath: string;
+  absolutePath: string;
+}
+
+export interface RemoveFilesResult extends ProjectEditResult {
+  filesRemoved: number;
+  entries: RemovedFileEntry[];
 }
 
 export interface EncodingCounts {

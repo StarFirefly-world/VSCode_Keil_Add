@@ -142,6 +142,7 @@ export class ProjectFilesViewProvider implements vscode.TreeDataProvider<vscode.
       this.action(t.view.newC, 'new-file', 'keilProject.addNewC'),
       this.action(t.view.newH, 'new-file', 'keilProject.addNewH'),
       this.action(t.view.addModule, 'symbol-module', 'keilProject.addModule'),
+      this.action(t.view.deleteModule, 'trash', 'keilProject.deleteModule'),
       this.action(t.view.addExisting, 'files', 'keilProject.addExistingFiles'),
       this.action(t.view.createGroup, 'add', 'keilProject.createGroup'),
       this.action(t.view.selectProject, 'folder-opened', 'keilProject.selectProject'),

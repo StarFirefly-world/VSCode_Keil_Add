@@ -9,6 +9,7 @@ export const t = {
   buttons: {
     continueAdd: '继续添加',
     saveAndContinue: '保存并继续',
+    deleteModule: '删除模块',
   },
   project: {
     pickTitle: '选择当前 Keil 工程',
@@ -111,6 +112,7 @@ export const t = {
     newC: '新建 Keil C 文件',
     newH: '新建 Keil H 文件',
     addModule: '添加模块…',
+    deleteModule: '删除模块…',
     addExisting: '添加已有文件…',
     createGroup: '新建 Group…',
     selectProject: '选择当前工程…',
@@ -139,6 +141,28 @@ export const t = {
       `工程更新失败，且无法完整清理模块文件，请手动检查：${moduleDirectory}`,
     internalState: '模块文件创建状态异常。',
     autoOpenFailed: (reason: string) => `模块已创建并加入工程，但自动打开失败：${reason}`,
+    deletePickTitle: '选择要删除的模块',
+    deletePickPlaceholder: '模块文件夹及其工程条目都会被删除',
+    deleteBrowseLabel: '$(folder-opened) 选择其他模块文件夹…',
+    deleteDialogTitle: '选择要删除的模块文件夹',
+    deleteCandidateDescription: (targets: string, groups: string) =>
+      `${targets}${groups.length > 0 ? ` · ${groups}` : ''}`,
+    deleteCandidateDetail: (moduleDirectory: string, entryCount: number) =>
+      `${moduleDirectory} · ${entryCount} 个工程条目`,
+    deleteConfirmTitle: (moduleName: string) => `删除模块 "${moduleName}"？`,
+    deleteConfirmFolder: (moduleDirectory: string) => `文件夹：${moduleDirectory}`,
+    deleteFilesHeader: (count: number) => `将删除文件（${count}）：`,
+    deleteEntriesHeader: (count: number) => `将从工程删除条目（${count}）：`,
+    deleteNoEntries: '工程文件中没有引用该模块目录的条目，仅删除文件夹。',
+    deleteWarning: '文件夹及其内容将被递归删除，此操作无法撤销。',
+    deleteNotModuleFolder: (moduleDirectory: string) =>
+      `所选文件夹不是模块文件夹（缺少同名 .c/.h）：${moduleDirectory}`,
+    deleteUnsafeFolder: (moduleDirectory: string) =>
+      `不能删除包含 .uvprojx 工程文件的目录：${moduleDirectory}`,
+    deleted: (moduleName: string, fileCount: number, entryCount: number) =>
+      `已删除模块 "${moduleName}"：${fileCount} 个磁盘文件，${entryCount} 个工程条目。${t.commands.reloadHint}`,
+    deleteFolderFailed: (moduleDirectory: string, reason: string) =>
+      `工程条目已删除，但模块文件夹删除失败：${moduleDirectory}。${reason}`,
   },
   commands: {
     targetNotFound: (name: string) => `未找到 Target "${name}"。`,

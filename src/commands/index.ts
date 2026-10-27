@@ -2,6 +2,7 @@ import { addExistingFiles } from './addExistingFiles';
 import { addModule } from './addModule';
 import { addNewFile } from './addNewFile';
 import { createGroup, selectProject } from './selectProject';
+import { deleteModule } from './deleteModule';
 import { setProjectRoot } from './setProjectRoot';
 import type { CommandDependencies } from './common';
 
@@ -22,6 +23,10 @@ export class KeilCommands {
 
   public addModule(): Promise<void> {
     return addModule(this.deps);
+  }
+
+  public deleteModule(): Promise<void> {
+    return deleteModule(this.deps);
   }
 
   public setProjectRoot(): Promise<void> {

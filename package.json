@@ -23,6 +23,7 @@
     "onCommand:keilProject.addNewC",
     "onCommand:keilProject.addNewH",
     "onCommand:keilProject.addModule",
+    "onCommand:keilProject.deleteModule",
     "onCommand:keilProject.addExistingFiles",
     "onCommand:keilProject.setProjectRoot",
     "onCommand:keilProject.selectProject",
@@ -49,6 +50,12 @@
         "title": "添加 Keil 模块",
         "category": "Keil Project Files",
         "icon": "$(symbol-module)"
+      },
+      {
+        "command": "keilProject.deleteModule",
+        "title": "删除 Keil 模块",
+        "category": "Keil Project Files",
+        "icon": "$(trash)"
       },
       {
         "command": "keilProject.addExistingFiles",
