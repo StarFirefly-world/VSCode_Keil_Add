@@ -104,9 +104,7 @@ async function cleanupModule(
   return complete && directoryRemoved;
 }
 
-export async function addModule(
-  deps: CommandDependencies,
-): Promise<void> {
+export async function addModule(deps: CommandDependencies): Promise<void> {
   const session = new ProjectSession(deps);
   const snapshot = await session.resolveProject();
   if (!snapshot) {
