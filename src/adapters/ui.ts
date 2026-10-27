@@ -31,6 +31,10 @@ export interface UiPort {
     projectDirectory: vscode.Uri,
     mode?: 'file' | 'module',
   ): Promise<vscode.Uri | undefined>;
+  pickProjectRoot(
+    currentRoot: string | undefined,
+    inferredRoot: string,
+  ): Promise<string | null | undefined>;
   inputFileName(extension: '.c' | '.h'): Promise<string | undefined>;
   inputModuleName(): Promise<string | undefined>;
   pickEncoding(
@@ -56,6 +60,10 @@ interface GroupItem extends vscode.QuickPickItem {
 interface DirectoryItem extends vscode.QuickPickItem {
   directory?: vscode.Uri;
   browse?: boolean;
+}
+
+interface ProjectRootItem extends vscode.QuickPickItem {
+  action?: 'choose' | 'auto';
 }
 
 interface EncodingItem extends vscode.QuickPickItem {
@@ -266,6 +274,49 @@ export class VSCodeUi implements UiPort {
       return folders?.[0];
     }
     return picked.directory;
+  }
+
+  public async pickProjectRoot(
+    currentRoot: string | undefined,
+    inferredRoot: string,
+  ): Promise<string | null | undefined> {
+    const items: ProjectRootItem[] = [
+      {
+        label: t.projectRoot.chooseLabel,
+        description: currentRoot
+          ? t.projectRoot.current(currentRoot)
+          : t.projectRoot.autoCurrent(inferredRoot),
+        action: 'choose',
+      },
+    ];
+    if (currentRoot) {
+      items.push({
+        label: t.projectRoot.autoLabel,
+        description: t.projectRoot.autoDescription(inferredRoot),
+        action: 'auto',
+      });
+    }
+
+    const picked = await vscode.window.showQuickPick(items, {
+      title: t.projectRoot.setTitle,
+      placeHolder: t.projectRoot.placeholder,
+      ignoreFocusOut: true,
+    });
+    if (!picked) {
+      return undefined;
+    }
+    if (picked.action === 'auto') {
+      return null;
+    }
+
+    const folders = await vscode.window.showOpenDialog({
+      title: t.projectRoot.dialogTitle,
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      defaultUri: vscode.Uri.file(currentRoot ?? inferredRoot),
+    });
+    return folders?.[0]?.fsPath;
   }
 
   public async inputFileName(extension: '.c' | '.h'): Promise<string | undefined> {

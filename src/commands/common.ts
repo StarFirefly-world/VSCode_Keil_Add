@@ -1,3 +1,4 @@
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -8,8 +9,13 @@ import type {
   TargetNode,
 } from '../core/model';
 import { findGroup } from '../core/parseProject';
-import { commonDirectory, resolveProjectEntryPath } from '../core/paths';
+import {
+  commonDirectory,
+  overallProjectRoot,
+  resolveProjectEntryPath,
+} from '../core/paths';
 import { countSourceEncodings, recommendSourceEncoding } from '../core/sourceEncoding';
+import { KeilProjectError } from '../core/errors';
 import type { ConfigPort } from '../adapters/config';
 import type {
   ProjectRepositoryPort,
@@ -141,12 +147,34 @@ export class ProjectSession {
       }
     }
 
-    return path.dirname(project.path);
+    return this.deps.state.getProjectRoot(project.path) ?? path.dirname(project.path);
+  }
+
+  /** User-configured overall project folder, or a workspace-based inference. */
+  public projectRoot(project: ProjectDocument): string {
+    return (
+      this.deps.state.getProjectRoot(project.path) ?? this.inferredProjectRoot(project)
+    );
+  }
+
+  public inferredProjectRoot(project: ProjectDocument): string {
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(
+      vscode.Uri.file(project.path),
+    );
+    return overallProjectRoot(project.path, workspaceFolder?.uri.fsPath);
   }
 }
 
-export function projectDirectoryUri(project: ProjectDocument): vscode.Uri {
-  return vscode.Uri.file(path.dirname(project.path));
+export async function ensureExistingDirectory(directoryPath: string): Promise<void> {
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(directoryPath);
+  } catch (error) {
+    throw new KeilProjectError('io', t.commands.directoryMissing(directoryPath), error);
+  }
+  if (!stat.isDirectory()) {
+    throw new KeilProjectError('io', t.commands.directoryNotDirectory(directoryPath));
+  }
 }
 
 export function targetFileKeys(

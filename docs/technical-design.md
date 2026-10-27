@@ -1,6 +1,6 @@
 # Keil Project Files 技术方案
 
-> 版本：v1.1  
+> 版本：v1.2  
 > 对应产品文档：[PRODUCT_DESIGN.md](../PRODUCT_DESIGN.md)  
 > 状态：已实现（0.1.0），本文档与当前实现对齐
 
@@ -50,6 +50,7 @@ Application（流程编排）
   ├─ ProjectRepository    工程发现、读取、缓存
   ├─ ProjectWriter        编码感知的工程文件写入与回滚
   ├─ SourceFileService    新源文件编码与落盘
+  ├─ WorkspaceState       当前工程、Target、目录编码、总工程文件夹
   └─ UiPort               工程/Target/Group/目录/文件名/编码选择
           │
           ▼
@@ -295,6 +296,8 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 
 - 路径相对于 `.uvprojx` 所在目录计算，使用 `path.win32`。
 - 同一目录或子目录统一为 `.\App\main.c` 风格；不同盘符保留绝对路径并提示。
+- 总工程文件夹只影响目录选择器的工程根目录与默认回退，不改变 `.uvprojx` 中已有 `<FilePath>` 的解析规则。
+- 目录默认顺序为 Group 公共目录 > 用户设置的总工程文件夹 > `.uvprojx` 所在目录；自动推断的工程根目录只用于目录选择器快捷项，不自动改变默认目录。
 - 路径和文件名做 XML 转义。
 - 去重基于规范化绝对路径；Windows 下忽略大小写和斜杠差异。
 - 新建文件前检查同名文件、非法字符和 Windows 保留名。
@@ -320,17 +323,18 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 | `keilProject.addModule` | 创建模块文件夹（同名 `.c`/`.h`），仅 `.c` 加入工程 |
 | `keilProject.addExistingFiles` | 多选已有文件加入工程 |
 | `keilProject.selectProject` | 手动选择当前工程 |
+| `keilProject.setProjectRoot` | 设置当前工程的总工程文件夹，或恢复自动推断 |
 | `keilProject.createGroup` | 新建 Group（可被选择器复用） |
 | `keilProject.refreshView` | 刷新活动栏视图 |
 
 入口：
 
-- 活动栏“Keil 工程文件”面板（`keilProjectFiles.home` 视图，含视图标题栏按钮）；
+- 活动栏“Keil 工程文件”面板（`keilProjectFiles.home` 视图，含当前工程、上次 Target、总工程文件夹状态和视图标题栏按钮）；
 - 命令面板；
 - 命令一律不接收资源管理器上下文参数；资源管理器右键菜单入口已在发布版移除；
 - 不新增独立工程树，不向 Keil Assistant 添加菜单。
 
-流程使用原生 QuickPick / InputBox 分步完成；当前工程、Target、最近使用目录和目录编码选择保存在 `workspaceState`。
+流程使用原生 QuickPick / InputBox 分步完成；当前工程、Target、目录编码选择以及按工程保存的总工程文件夹保存在 `workspaceState`。总工程文件夹的默认值由 `overallProjectRoot` 根据工作区和 `.uvprojx` 位置推断；用户设置值优先于推断值。
 
 ## 10. 可见性
 
@@ -365,6 +369,7 @@ VS Code 默认按 UTF-8 打开，`files.autoGuessEncoding` 默认关闭。扩展
 - GB2312 工程文件字节写入；
 - GB2312 新文件不自动打开；
 - 工程更新失败时删除刚创建的文件；
+- 设置、恢复总工程文件夹，并验证目录选择器使用该根目录；
 - 临时工作区 + 最小 `.uvprojx` fixture。
 
 ### 11.3 真实工程验证
@@ -386,6 +391,7 @@ src/
     addExistingFiles.ts
     addModule.ts
     selectProject.ts
+    setProjectRoot.ts
     common.ts
     index.ts
   core/

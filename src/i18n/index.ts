@@ -51,6 +51,19 @@ export const t = {
     moduleDefaultDetail: '将在此目录下创建“模块名”文件夹',
     moduleBrowseTitle: '选择模块所在的父文件夹',
   },
+  projectRoot: {
+    setTitle: '设置总工程文件夹',
+    dialogTitle: '选择总工程文件夹',
+    chooseLabel: '$(folder-opened) 选择总工程文件夹…',
+    current: (rootPath: string) => `当前：${rootPath}`,
+    autoCurrent: (inferredPath: string) => `自动推断：${inferredPath}`,
+    autoLabel: '$(sync) 恢复自动推断',
+    autoDescription: (inferredPath: string) => `自动推断：${inferredPath}`,
+    placeholder: '用于目录选择器的“工程根目录”和默认回退，不会改写已有源文件路径',
+    saved: (rootPath: string) =>
+      `总工程文件夹已设置为：${rootPath}。后续目录选择器会以此为工程根目录。`,
+    cleared: (inferredPath: string) => `已恢复自动推断的总工程文件夹：${inferredPath}`,
+  },
   file: {
     inputTitle: (extension: '.c' | '.h') =>
       `新建 Keil ${extension === '.c' ? 'C' : 'H'} 文件`,
@@ -90,6 +103,8 @@ export const t = {
     currentProject: '当前工程',
     currentTarget: '当前 Target',
     targetOnDemand: '执行命令时选择',
+    projectRoot: '总工程文件夹',
+    projectRootAuto: '自动推断',
     noProject: '尚未选择 Keil 工程',
     selectProjectHint: '点击选择',
     missingProject: '当前工程不存在',

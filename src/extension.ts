@@ -72,6 +72,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   register('keilProject.addNewH', () => commands.addNewH());
   register('keilProject.addExistingFiles', () => commands.addExistingFiles());
   register('keilProject.addModule', () => commands.addModule());
+  register('keilProject.setProjectRoot', () => commands.setProjectRoot());
   register('keilProject.selectProject', () => commands.selectProject());
   register('keilProject.createGroup', () => commands.createGroup());
 

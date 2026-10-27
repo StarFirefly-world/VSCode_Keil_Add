@@ -11,7 +11,6 @@ import { renderSourceTemplate, type TemplateKind } from '../core/templates';
 import { t } from '../i18n';
 import {
   chooseSourceEncoding,
-  projectDirectoryUri,
   ProjectSession,
   targetFileKeys,
   type CommandDependencies,
@@ -84,7 +83,7 @@ export async function addNewFile(
   const defaultDirectory = await session.defaultDirectory(project, target, groupName);
   const directoryUri = await deps.ui.pickDirectory(
     vscode.Uri.file(defaultDirectory),
-    projectDirectoryUri(project),
+    vscode.Uri.file(session.projectRoot(project)),
   );
   if (!directoryUri) {
     return;

@@ -247,14 +247,22 @@ export function parseProject(
       fileTypeText = '';
     } else if (tag.name === 'Files' && currentGroup) {
       if (frame && frame.selfClosing) {
-        currentGroup.filesClose = findSelfClosingTagStart(text, parser.position, tag.name);
+        currentGroup.filesClose = findSelfClosingTagStart(
+          text,
+          parser.position,
+          tag.name,
+        );
         currentGroup.filesIsSelfClosing = true;
       } else {
         currentGroup.filesClose = closeStart >= 0 ? closeStart : undefined;
       }
     } else if (tag.name === 'Group' && currentGroup && currentTarget) {
       if (frame && frame.selfClosing) {
-        currentGroup.groupClose = findSelfClosingTagStart(text, parser.position, tag.name);
+        currentGroup.groupClose = findSelfClosingTagStart(
+          text,
+          parser.position,
+          tag.name,
+        );
         currentGroup.groupIsSelfClosing = true;
       } else {
         currentGroup.groupClose = closeStart;
@@ -266,7 +274,11 @@ export function parseProject(
       currentGroup = undefined;
     } else if (tag.name === 'Groups' && currentTarget) {
       if (frame && frame.selfClosing) {
-        currentTarget.groupsClose = findSelfClosingTagStart(text, parser.position, tag.name);
+        currentTarget.groupsClose = findSelfClosingTagStart(
+          text,
+          parser.position,
+          tag.name,
+        );
         currentTarget.groupsIsSelfClosing = true;
       } else {
         currentTarget.groupsClose = closeStart >= 0 ? closeStart : undefined;

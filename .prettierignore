@@ -4,6 +4,7 @@ out/
 out-test/
 coverage/
 .vscode-test/
+.qoder-credits/
 package-lock.json
 *.vsix
 PRODUCT_DESIGN.md

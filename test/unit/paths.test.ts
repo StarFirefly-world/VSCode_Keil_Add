@@ -76,9 +76,7 @@ describe('paths', () => {
   it('allows sibling source folders beside a USER project directory', () => {
     const project = 'D:\\Projects\\DemoProject\\USER\\demo.uvprojx';
     const workspace = 'D:\\Projects\\DemoProject\\USER';
-    expect(overallProjectRoot(project, workspace)).toBe(
-      'D:\\Projects\\DemoProject',
-    );
+    expect(overallProjectRoot(project, workspace)).toBe('D:\\Projects\\DemoProject');
   });
 
   it('finds the common directory of group files', () => {

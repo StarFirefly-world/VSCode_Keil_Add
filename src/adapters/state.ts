@@ -9,6 +9,8 @@ export interface StatePort {
   setLastTarget(projectPath: string, targetName: string): Promise<void>;
   getDirectoryEncoding(directoryPath: string): SourceCharset | undefined;
   setDirectoryEncoding(directoryPath: string, charset: SourceCharset): Promise<void>;
+  getProjectRoot(projectPath: string): string | undefined;
+  setProjectRoot(projectPath: string, rootPath: string | undefined): Promise<void>;
 }
 
 function targetKey(projectPath: string): string {
@@ -17,6 +19,10 @@ function targetKey(projectPath: string): string {
 
 function encodingKey(directoryPath: string): string {
   return `keilProject.encoding:${directoryPath.toLowerCase()}`;
+}
+
+function projectRootKey(projectPath: string): string {
+  return `keilProject.projectRoot:${projectPath.toLowerCase()}`;
 }
 
 export class WorkspaceState implements StatePort {
@@ -47,5 +53,16 @@ export class WorkspaceState implements StatePort {
     charset: SourceCharset,
   ): Promise<void> {
     await this.memento.update(encodingKey(directoryPath), charset);
+  }
+
+  public getProjectRoot(projectPath: string): string | undefined {
+    return this.memento.get<string>(projectRootKey(projectPath));
+  }
+
+  public async setProjectRoot(
+    projectPath: string,
+    rootPath: string | undefined,
+  ): Promise<void> {
+    await this.memento.update(projectRootKey(projectPath), rootPath);
   }
 }

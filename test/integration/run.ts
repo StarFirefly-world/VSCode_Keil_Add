@@ -108,6 +108,7 @@ class MemoryState implements StatePort {
   private current: string | undefined;
   private readonly targets = new Map<string, string>();
   private readonly encodings = new Map<string, SourceCharset>();
+  private readonly projectRoots = new Map<string, string>();
 
   public getCurrentProject(): string | undefined {
     return this.current;
@@ -135,6 +136,22 @@ class MemoryState implements StatePort {
   ): Promise<void> {
     this.encodings.set(directoryPath.toLowerCase(), charset);
   }
+
+  public getProjectRoot(projectPath: string): string | undefined {
+    return this.projectRoots.get(projectPath.toLowerCase());
+  }
+
+  public async setProjectRoot(
+    projectPath: string,
+    rootPath: string | undefined,
+  ): Promise<void> {
+    const key = projectPath.toLowerCase();
+    if (rootPath === undefined) {
+      this.projectRoots.delete(key);
+    } else {
+      this.projectRoots.set(key, rootPath);
+    }
+  }
 }
 
 interface FakeUiOptions {
@@ -147,6 +164,7 @@ interface FakeUiOptions {
   confirm?: boolean;
   groupChoice?: GroupPick;
   newGroupName?: string;
+  projectRootChoice?: string | null;
 }
 
 class FakeUi implements UiPort {
@@ -154,8 +172,13 @@ class FakeUi implements UiPort {
   public readonly warnings: string[] = [];
   public readonly errors: string[] = [];
   public readonly previews: AddPreview[] = [];
+  public projectRootChoice: string | null | undefined;
+  public lastDefaultDirectory: string | undefined;
+  public lastRootDirectory: string | undefined;
 
-  public constructor(private readonly options: FakeUiOptions = {}) {}
+  public constructor(private readonly options: FakeUiOptions = {}) {
+    this.projectRootChoice = options.projectRootChoice;
+  }
 
   public async pickProject(): Promise<string | undefined> {
     return undefined;
@@ -188,8 +211,16 @@ class FakeUi implements UiPort {
 
   public async pickDirectory(
     defaultDirectory: vscode.Uri,
+    projectDirectory: vscode.Uri,
+    _mode?: 'file' | 'module',
   ): Promise<vscode.Uri | undefined> {
+    this.lastDefaultDirectory = defaultDirectory.fsPath;
+    this.lastRootDirectory = projectDirectory.fsPath;
     return this.options.directory ?? defaultDirectory;
+  }
+
+  public async pickProjectRoot(): Promise<string | null | undefined> {
+    return this.projectRootChoice;
   }
 
   public async inputFileName(): Promise<string | undefined> {
@@ -322,6 +353,7 @@ describe('Keil Project Files integration', () => {
       'keilProject.addNewH',
       'keilProject.addModule',
       'keilProject.addExistingFiles',
+      'keilProject.setProjectRoot',
       'keilProject.selectProject',
       'keilProject.createGroup',
       'keilProject.refreshView',
@@ -369,6 +401,76 @@ describe('Keil Project Files integration', () => {
     assert.ok(labels.includes(t.view.addExisting));
     assert.ok(items.some((item) => item.command?.command === 'keilProject.addNewC'));
     assert.deepEqual(await provider.getChildren(items[0]), []);
+  });
+
+  it('shows and updates the configured overall project folder', async () => {
+    const temp = await createTempProject('utf8');
+    const hardware = path.join(temp.root, 'HARDWARE');
+    await fs.mkdir(hardware);
+    const env = createEnvironment(temp.projectPath, {
+      projectRootChoice: hardware,
+    });
+    try {
+      await new KeilCommands(env.deps).setProjectRoot();
+      assert.equal(env.state.getProjectRoot(temp.projectPath), path.resolve(hardware));
+      assert.ok(env.ui.infos.some((message) => message.includes('总工程文件夹')));
+
+      env.ui.projectRootChoice = null;
+      await new KeilCommands(env.deps).setProjectRoot();
+      assert.equal(env.state.getProjectRoot(temp.projectPath), undefined);
+      assert.ok(env.ui.infos.some((message) => message.includes('自动推断')));
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('uses the configured project root as the module directory picker root', async () => {
+    const temp = await createTempProject('utf8');
+    const hardware = path.join(temp.root, 'HARDWARE');
+    await fs.mkdir(hardware);
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(hardware),
+      moduleName: 'rootmod',
+      charset: 'utf8',
+      groupChoice: { kind: 'create' },
+      newGroupName: 'Drivers',
+    });
+    try {
+      await env.state.setProjectRoot(temp.projectPath, hardware);
+      await new KeilCommands(env.deps).addModule();
+
+      assert.equal(env.ui.lastRootDirectory?.toLowerCase(), hardware.toLowerCase());
+      assert.equal(env.ui.lastDefaultDirectory?.toLowerCase(), hardware.toLowerCase());
+      assert.equal(
+        (await fs.stat(path.join(hardware, 'rootmod', 'rootmod.c'))).isFile(),
+        true,
+      );
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('shows the configured overall project folder in the sidebar', async () => {
+    const temp = await createTempProject('utf8');
+    const hardware = path.join(temp.root, 'HARDWARE');
+    await fs.mkdir(hardware);
+    const state = new MemoryState();
+    await state.setCurrentProject(temp.projectPath);
+    await state.setProjectRoot(temp.projectPath, hardware);
+    const provider = new ProjectFilesViewProvider(
+      state,
+      new FakeConfig(''),
+      new ProjectRepository(),
+    );
+    try {
+      const items = await provider.getChildren();
+      const rootItem = items.find((item) => treeItemLabel(item) === t.view.projectRoot);
+      assert.ok(rootItem);
+      assert.equal(rootItem.description, hardware);
+      assert.equal(rootItem.command?.command, 'keilProject.setProjectRoot');
+    } finally {
+      await fs.rm(temp.root, { recursive: true, force: true }).catch(() => undefined);
+    }
   });
 
   it('creates a UTF-8 C file through the full command flow', async () => {

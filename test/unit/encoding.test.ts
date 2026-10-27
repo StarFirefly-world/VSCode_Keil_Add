@@ -118,9 +118,7 @@ describe('project encoding', () => {
       '调试',
       '丂',
     );
-    expect(() => decodeProjectBytes(iconv.encode(xml, 'gbk'))).toThrow(
-      /非 GB2312 字节/,
-    );
+    expect(() => decodeProjectBytes(iconv.encode(xml, 'gbk'))).toThrow(/非 GB2312 字节/);
   });
 
   it('rejects a GBK declaration that contains GB18030 four-byte sequences', () => {
@@ -128,16 +126,12 @@ describe('project encoding', () => {
       '调试',
       '㐀',
     );
-    expect(() => decodeProjectBytes(iconv.encode(xml, 'gb18030'))).toThrow(
-      /非 GBK 字节/,
-    );
+    expect(() => decodeProjectBytes(iconv.encode(xml, 'gb18030'))).toThrow(/非 GBK 字节/);
   });
 
   it('encodes project text with the declared GB charset and rejects mismatched characters', () => {
     expect(() => encodeProjectText('丂', 'gb2312')).toThrow(/非 GB2312 字节/);
-    expect(() => encodeProjectText('㐀', 'gbk')).toThrow(
-      /无法无损地按原编码写回/,
-    );
+    expect(() => encodeProjectText('㐀', 'gbk')).toThrow(/无法无损地按原编码写回/);
     const gb18030Bytes = encodeProjectText('👋', 'gb18030');
     expect(gb18030Bytes.length).toBe(4);
     expect(decodeProjectBytes(gb18030Bytes).text).toBe('👋');

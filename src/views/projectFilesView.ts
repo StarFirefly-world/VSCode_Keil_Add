@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import type { ConfigPort } from '../adapters/config';
 import type { ProjectRepositoryPort } from '../adapters/projectRepository';
 import type { StatePort } from '../adapters/state';
+import { overallProjectRoot } from '../core/paths';
 import { t } from '../i18n';
 
 /**
@@ -48,6 +49,7 @@ export class ProjectFilesViewProvider implements vscode.TreeDataProvider<vscode.
     return [
       this.projectItem(projectPath),
       this.targetItem(projectPath),
+      this.projectRootItem(projectPath),
       ...this.actionItems(),
     ];
   }
@@ -112,6 +114,26 @@ export class ProjectFilesViewProvider implements vscode.TreeDataProvider<vscode.
     );
     item.description = lastTarget ?? t.view.targetOnDemand;
     item.iconPath = new vscode.ThemeIcon('symbol-namespace');
+    return item;
+  }
+
+  private projectRootItem(projectPath: string): vscode.TreeItem {
+    const configured = this.state.getProjectRoot(projectPath);
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(
+      vscode.Uri.file(projectPath),
+    );
+    const inferred = overallProjectRoot(projectPath, workspaceFolder?.uri.fsPath);
+    const item = new vscode.TreeItem(
+      t.view.projectRoot,
+      vscode.TreeItemCollapsibleState.None,
+    );
+    item.description = configured ?? t.view.projectRootAuto;
+    item.tooltip = configured ?? `${t.view.projectRootAuto}: ${inferred}`;
+    item.iconPath = new vscode.ThemeIcon('root-folder');
+    item.command = {
+      command: 'keilProject.setProjectRoot',
+      title: t.view.projectRoot,
+    };
     return item;
   }
 

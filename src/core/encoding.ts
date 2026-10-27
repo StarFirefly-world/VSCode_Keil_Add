@@ -210,10 +210,7 @@ export function decodeProjectBytes(bytes: Uint8Array): DecodedProjectFile {
       );
     }
     if (encoding !== 'gb2312' && encoding !== 'gbk' && encoding !== 'gb18030') {
-      throw new KeilProjectError(
-        'encoding',
-        `不支持的工程文件编码声明：${declared}`,
-      );
+      throw new KeilProjectError('encoding', `不支持的工程文件编码声明：${declared}`);
     }
     try {
       validateGbByteSequences(content, encoding);

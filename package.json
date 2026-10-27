@@ -24,6 +24,7 @@
     "onCommand:keilProject.addNewH",
     "onCommand:keilProject.addModule",
     "onCommand:keilProject.addExistingFiles",
+    "onCommand:keilProject.setProjectRoot",
     "onCommand:keilProject.selectProject",
     "onCommand:keilProject.createGroup",
     "onCommand:keilProject.refreshView",
@@ -54,6 +55,12 @@
         "title": "添加到 Keil 工程",
         "category": "Keil Project Files",
         "icon": "$(files)"
+      },
+      {
+        "command": "keilProject.setProjectRoot",
+        "title": "设置总工程文件夹",
+        "category": "Keil Project Files",
+        "icon": "$(root-folder)"
       },
       {
         "command": "keilProject.selectProject",

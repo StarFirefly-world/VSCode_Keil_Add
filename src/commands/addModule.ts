@@ -12,41 +12,16 @@ import {
   validateModuleName,
 } from '../core/moduleTemplates';
 import { findTarget } from '../core/parseProject';
-import { overallProjectRoot, resolveProjectEntryPath, toKeilPath } from '../core/paths';
+import { resolveProjectEntryPath, toKeilPath } from '../core/paths';
 import { t } from '../i18n';
 import {
   chooseSourceEncoding,
+  ensureExistingDirectory,
   ProjectSession,
   targetFileKeys,
   type CommandDependencies,
 } from './common';
 import type { CreatedSourceFile } from '../adapters/sourceFiles';
-
-function moduleRootForProject(projectPath: string): string {
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(
-    vscode.Uri.file(projectPath),
-  );
-  return overallProjectRoot(projectPath, workspaceFolder?.uri.fsPath);
-}
-
-async function ensureDirectory(directoryUri: vscode.Uri): Promise<void> {
-  let stat: Awaited<ReturnType<typeof fs.stat>>;
-  try {
-    stat = await fs.stat(directoryUri.fsPath);
-  } catch (error) {
-    throw new KeilProjectError(
-      'io',
-      t.commands.directoryMissing(directoryUri.fsPath),
-      error,
-    );
-  }
-  if (!stat.isDirectory()) {
-    throw new KeilProjectError(
-      'io',
-      t.commands.directoryNotDirectory(directoryUri.fsPath),
-    );
-  }
-}
 
 async function chooseModuleName(
   deps: CommandDependencies,
@@ -127,7 +102,7 @@ export async function addModule(deps: CommandDependencies): Promise<void> {
   }
 
   const defaultDirectory = await session.defaultDirectory(project, target, groupName);
-  const moduleRoot = moduleRootForProject(project.path);
+  const moduleRoot = session.projectRoot(project);
   const parentDirectoryUri = await deps.ui.pickDirectory(
     vscode.Uri.file(defaultDirectory),
     vscode.Uri.file(moduleRoot),
@@ -136,7 +111,7 @@ export async function addModule(deps: CommandDependencies): Promise<void> {
   if (!parentDirectoryUri) {
     return;
   }
-  await ensureDirectory(parentDirectoryUri);
+  await ensureExistingDirectory(parentDirectoryUri.fsPath);
 
   const moduleName = await chooseModuleName(
     deps,
