@@ -78,6 +78,32 @@ async function createTempProject(charset: 'utf8' | 'gb2312'): Promise<TempProjec
   return { root, projectPath, appDirectory, projectText: text };
 }
 
+function twoTargetProjectText(): string {
+  const target = (name: string) => `    <Target>
+      <TargetName>${name}</TargetName>
+      <Groups>
+        <Group>
+          <GroupName>App</GroupName>
+          <Files>
+            <File>
+              <FileName>main.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\\App\\main.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+      </Groups>
+    </Target>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Project>
+  <Targets>
+${target('Debug')}
+${target('Release')}
+  </Targets>
+</Project>
+`;
+}
+
 class FakeConfig implements ConfigPort {
   public projectFile = '';
   public encoding: 'auto' | 'utf8' | 'gb2312' = 'utf8';
@@ -173,6 +199,7 @@ interface FakeUiOptions {
   projectRootChoice?: string | null;
   moduleDeleteChoice?: string;
   confirmDelete?: boolean;
+  targetChoice?: string;
 }
 
 class FakeUi implements UiPort {
@@ -184,6 +211,7 @@ class FakeUi implements UiPort {
   public readonly deleteCandidates: ModuleDeleteCandidate[][] = [];
   public projectRootChoice: string | null | undefined;
   public moduleDeleteChoice: string | undefined;
+  public targetChoice: string | undefined;
   public confirmDeleteResult: boolean;
   public lastDefaultDirectory: string | undefined;
   public lastRootDirectory: string | undefined;
@@ -191,6 +219,7 @@ class FakeUi implements UiPort {
   public constructor(private readonly options: FakeUiOptions = {}) {
     this.projectRootChoice = options.projectRootChoice;
     this.moduleDeleteChoice = options.moduleDeleteChoice;
+    this.targetChoice = options.targetChoice;
     this.confirmDeleteResult = options.confirmDelete ?? true;
   }
 
@@ -207,7 +236,7 @@ class FakeUi implements UiPort {
   }
 
   public async pickTarget(): Promise<string | undefined> {
-    return 'Debug';
+    return this.targetChoice ?? 'Debug';
   }
 
   public async pickGroup(groupNames: string[]): Promise<GroupPick | undefined> {
@@ -809,6 +838,58 @@ describe('Keil Project Files integration', () => {
         ['Debug'],
       );
       assert.deepEqual(env.ui.deletePreviews[0].files, ['motor.c', 'motor.h']);
+      assert.ok(env.ui.infos.some((message) => message.includes('已删除模块')));
+    } finally {
+      await cleanup(temp, env.storage);
+    }
+  });
+
+  it('removes module entries from two targets in a single write', async () => {
+    const temp = await createTempProject('utf8');
+    await fs.writeFile(
+      temp.projectPath,
+      encodeProjectText(twoTargetProjectText(), 'utf8'),
+    );
+    const moduleDirectory = path.join(temp.root, 'motor');
+    const env = createEnvironment(temp.projectPath, {
+      directory: vscode.Uri.file(temp.root),
+      moduleName: 'motor',
+      charset: 'utf8',
+      existingFiles: [
+        vscode.Uri.file(path.join(moduleDirectory, 'motor.c')),
+        vscode.Uri.file(path.join(moduleDirectory, 'motor.h')),
+      ],
+    });
+    try {
+      await new KeilCommands(env.deps).addModule();
+      env.ui.targetChoice = 'Release';
+      await new KeilCommands(env.deps).addExistingFiles();
+
+      env.ui.targetChoice = 'Debug';
+      env.ui.moduleDeleteChoice = moduleDirectory;
+      await new KeilCommands(env.deps).deleteModule();
+
+      await assert.rejects(fs.stat(moduleDirectory), /ENOENT/);
+      const decoded = decodeProjectBytes(await fs.readFile(temp.projectPath));
+      assert.equal(decoded.text.includes('motor'), false);
+      const updated = parseProject(decoded.text, temp.projectPath);
+      assert.deepEqual(
+        updated.targets.map((target) => target.name),
+        ['Debug', 'Release'],
+      );
+      assert.deepEqual(
+        updated.targets[0].groups[0].files.map((file) => file.name),
+        ['main.c'],
+      );
+      assert.deepEqual(
+        updated.targets[1].groups[0].files.map((file) => file.name),
+        ['main.c'],
+      );
+      assert.equal(env.ui.deletePreviews[0].entries.length, 3);
+      assert.deepEqual(
+        env.ui.deletePreviews[0].entries.map((entry) => entry.targetName),
+        ['Debug', 'Release', 'Release'],
+      );
       assert.ok(env.ui.infos.some((message) => message.includes('已删除模块')));
     } finally {
       await cleanup(temp, env.storage);
