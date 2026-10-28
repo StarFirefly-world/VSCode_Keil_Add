@@ -1,5 +1,7 @@
 # Keil Project Files
 
+> 使用 AI 制作（Made with AI）
+
 > English: A VS Code extension for Keil MDK5 ARM projects. Create `.c` / `.h` files, add existing files, and insert them into the correct Target / Group of `.uvprojx` — without leaving VS Code.
 
 在 VS Code 中完成 Keil MDK5 ARM 工程的三件事：
